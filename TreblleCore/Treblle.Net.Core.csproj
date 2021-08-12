@@ -7,14 +7,15 @@
     <PackageId>Treblle.Net.Core</PackageId>
     <Product>Treblle .NET Core</Product>
     <Description>Treblle makes it super easy to understand what’s going on with your APIs and the apps that use them.</Description>
-    <PackageProjectUrl>https://treblle.com/</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/Treblle/treblle-net-core</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Treblle/treblle-net-core</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Treblle/treblle-net-core.git</RepositoryUrl>
     <NeutralLanguage></NeutralLanguage>
     <PackageIcon>TreblleIcon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <AssemblyName>TreblleNetCore</AssemblyName>
     <RootNamespace>Treblle.Net.Core</RootNamespace>
     <Copyright>Copyright 2021, Treblle Limited</Copyright>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
