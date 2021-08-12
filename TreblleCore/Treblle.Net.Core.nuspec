@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>Treblle.Net.Core</id>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <authors>Treblle</authors>
     <owners>Treblle</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
@@ -30,7 +30,7 @@
   <files>
     <file src="bin\Release\netcoreapp3.1\TreblleNetCore.dll" target="lib\netcoreapp3.1\TreblleNetCore.dll" />
     <file src="tools\init.ps1" target="tools\init.ps1" />
-    <file src="README.md" target="\README.md" />
+    <file src="..\README.md" target="\README.md" />
     <file src="resources\TreblleIcon.png" target="resources\" />
   </files>
 </package>
