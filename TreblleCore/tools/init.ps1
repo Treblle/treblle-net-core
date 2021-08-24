@@ -82,10 +82,6 @@ if ($file -eq $null){
                 # Set the File Name Create The Document
                 $XmlWriter = [System.XML.XmlWriter]::Create($filePath, $xmlsettings)
 
-                # Write the XML Decleration and set the XSL
-                $xmlWriter.WriteStartDocument()
-                $xmlWriter.WriteProcessingInstruction("xml-stylesheet", "type='text/xsl' href='style.xsl'")
-
                 # Start the Root Element
                 $xmlWriter.WriteStartElement("configuration")
   

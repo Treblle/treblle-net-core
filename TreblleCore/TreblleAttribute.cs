@@ -185,7 +185,7 @@ namespace Treblle.Net.Core
             }
             catch (Exception ex)
             {
-
+                await next();
             }
         }
 
