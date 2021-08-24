@@ -104,14 +104,43 @@ namespace Treblle.Net.Core
                         }
                         catch (Exception ex)
                         {
-
+                            Logger.LogMessage("An error occured while attempting to read request headers. --- Exception message: " + ex.Message, LogMessageType.Error);
                         }
+                    }
+                }
+                else
+                {
+                    if (String.IsNullOrWhiteSpace(ApiKey))
+                    {
+                        Logger.LogMessage("Treblle API key not set.", LogMessageType.Info);
+                    }
+                    if (String.IsNullOrWhiteSpace(ProjectId))
+                    {
+                        Logger.LogMessage("Treblle Project ID not set.", LogMessageType.Info);
                     }
                 }
             }
             catch (Exception ex)
             {
-
+                string actionDescriptor = "";
+                if (actionContext != null)
+                {
+                    if (actionContext.ActionDescriptor != null)
+                    {
+                        if (!String.IsNullOrWhiteSpace(actionContext.ActionDescriptor.DisplayName))
+                        {
+                            actionDescriptor = " --- At: " + actionContext.ActionDescriptor.DisplayName;
+                        }
+                    }
+                }
+                if (ex is ConfigurationException)
+                {
+                    Logger.LogMessage("An error occured while trying to read the configuration file. Check if app.config is formatted properly. --- Exception message: " + ex.Message, LogMessageType.Error);
+                }
+                else
+                {
+                    Logger.LogMessage("An error occured while intercepting request." + actionDescriptor + " --- Exception message: " + ex.Message, LogMessageType.Error);
+                }
             }
             await next();
         }
@@ -125,7 +154,6 @@ namespace Treblle.Net.Core
 
                 if (!String.IsNullOrWhiteSpace(ApiKey) && !String.IsNullOrWhiteSpace(ProjectId))
                 {
-
                     response.Body = null;
                     var originalBodyStream = context.HttpContext.Response.Body;
                     using (var responseBody = new MemoryStream())
@@ -140,6 +168,7 @@ namespace Treblle.Net.Core
                         {
                             if (!context.HttpContext.Response.ContentType.ToString().Contains("application/json"))
                             {
+                                Logger.LogMessage("Attempted to intercept response but content type was not valid. Treblle only works on JSON API's.", LogMessageType.Info);
                                 return;
                             }
                         }
@@ -160,7 +189,7 @@ namespace Treblle.Net.Core
                         }
                         catch (Exception ex)
                         {
-
+                            Logger.LogMessage("An error occured while attempting to read response headers. --- Exception message: " + ex.Message, LogMessageType.Error);
                         }
                     }
 
@@ -182,9 +211,39 @@ namespace Treblle.Net.Core
 
                     PrepareAndSendJson();
                 }
+                else
+                {
+                    if (String.IsNullOrWhiteSpace(ApiKey))
+                    {
+                        Logger.LogMessage("Treblle API key not set.", LogMessageType.Info);
+                    }
+                    if (String.IsNullOrWhiteSpace(ProjectId))
+                    {
+                        Logger.LogMessage("Treblle Project ID not set.", LogMessageType.Info);
+                    }
+                }
             }
             catch (Exception ex)
             {
+                string actionDescriptor = "";
+                if (context != null)
+                {
+                    if (context.ActionDescriptor != null)
+                    {
+                        if (!String.IsNullOrWhiteSpace(context.ActionDescriptor.DisplayName))
+                        {
+                            actionDescriptor = " --- At: " + context.ActionDescriptor.DisplayName;
+                        }
+                    }
+                }
+                if (ex is ConfigurationException)
+                {
+                    Logger.LogMessage("An error occured while trying to read the configuration file. Check if app.config is formatted properly. --- Exception message: " + ex.Message, LogMessageType.Error);
+                }
+                else
+                {
+                    Logger.LogMessage("An error occured while intercepting response." + actionDescriptor + " --- Exception message: " + ex.Message, LogMessageType.Error);
+                }
                 await next();
             }
         }
@@ -208,7 +267,7 @@ namespace Treblle.Net.Core
                         }
                         catch (Exception ex)
                         {
-
+                            Logger.LogMessage("An error occured while attempting to read response headers. --- Exception message: " + ex.Message, LogMessageType.Error);
                         }
                     }
 
@@ -262,6 +321,7 @@ namespace Treblle.Net.Core
                         {
                             if (!context.HttpContext.Response.ContentType.ToString().Contains("application/json"))
                             {
+                                Logger.LogMessage("Attempted to intercept response but content type was not valid. Treblle only works on JSON API's.", LogMessageType.Info);
                                 return;
                             }
                         }
@@ -283,52 +343,86 @@ namespace Treblle.Net.Core
 
                     PrepareAndSendJson();
                 }
+                else
+                {
+                    if (String.IsNullOrWhiteSpace(ApiKey))
+                    {
+                        Logger.LogMessage("Treblle API key not set.", LogMessageType.Info);
+                    }
+                    if (String.IsNullOrWhiteSpace(ProjectId))
+                    {
+                        Logger.LogMessage("Treblle Project ID not set.", LogMessageType.Info);
+                    }
+                }
             }
             catch (Exception ex)
             {
-
+                string actionDescriptor = "";
+                if (context != null)
+                {
+                    if (context.ActionDescriptor != null)
+                    {
+                        if (!String.IsNullOrWhiteSpace(context.ActionDescriptor.DisplayName))
+                        {
+                            actionDescriptor = " --- At: " + context.ActionDescriptor.DisplayName;
+                        }
+                    }
+                }
+                if (ex is ConfigurationException)
+                {
+                    Logger.LogMessage("An error occured while trying to read the configuration file. Check if app.config is formatted properly. --- Exception message: " + ex.Message, LogMessageType.Error);
+                }
+                else
+                {
+                    Logger.LogMessage("An error occured while intercepting response." + actionDescriptor + " --- Exception message: " + ex.Message, LogMessageType.Error);
+                }
             }
         }
 
         public void PrepareAndSendJson()
         {
-
-            server.Os = os;
-
-            data.Language = language;
-            data.Request = request;
-            data.Response = response;
-            data.Server = server;
-
-            payload.Data = data;
-
-            var json = JsonConvert.SerializeObject(payload);
-
-            var additionalFieldsToMask = System.Configuration.ConfigurationManager.AppSettings["AdditionalFieldsToMask"];
-            if (!String.IsNullOrWhiteSpace(additionalFieldsToMask))
+            try
             {
-                var additionalFields = additionalFieldsToMask.Split(',');
-                if (additionalFields.Any())
+                server.Os = os;
+
+                data.Language = language;
+                data.Request = request;
+                data.Response = response;
+                data.Server = server;
+
+                payload.Data = data;
+
+                var json = JsonConvert.SerializeObject(payload);
+
+                var additionalFieldsToMask = System.Configuration.ConfigurationManager.AppSettings["AdditionalFieldsToMask"];
+                if (!String.IsNullOrWhiteSpace(additionalFieldsToMask))
                 {
-                    var list = additionalFields.ToList();
-                    sensitiveWords.AddRange(list);
+                    var additionalFields = additionalFieldsToMask.Split(',');
+                    if (additionalFields.Any())
+                    {
+                        var list = additionalFields.ToList();
+                        sensitiveWords.AddRange(list);
+                    }
                 }
+
+                var maskedJson = json.Mask(sensitiveWords.ToArray(), "*****");
+
+                var httpWebRequest = (HttpWebRequest)WebRequest.Create("https://rocknrolla.treblle.com");
+                httpWebRequest.ContentType = "application/json";
+                httpWebRequest.Method = "POST";
+                httpWebRequest.Headers.Add("x-api-key", ApiKey);
+
+                using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
+                {
+                    streamWriter.Write(maskedJson);
+                }
+
+                var httpResponse = httpWebRequest.GetResponse();
             }
-
-            var maskedJson = json.Mask(sensitiveWords.ToArray(), "*****");
-
-            var httpWebRequest = (HttpWebRequest)WebRequest.Create("https://rocknrolla.treblle.com");
-            httpWebRequest.ContentType = "application/json";
-            httpWebRequest.Method = "POST";
-            httpWebRequest.Headers.Add("x-api-key", ApiKey);
-
-            using (var streamWriter = new StreamWriter(httpWebRequest.GetRequestStream()))
+            catch (Exception ex)
             {
-                streamWriter.Write(maskedJson);
+                Logger.LogMessage("An error occured while sending data to Treblle. --- Exception message: " + ex.Message, LogMessageType.Error);
             }
-
-            var httpResponse = httpWebRequest.GetResponse();
-
         }
     }
 }

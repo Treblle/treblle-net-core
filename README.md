@@ -114,6 +114,9 @@ If you want to expand the list of fields you want to hide, you can pass property
 
 ```
 
+## Error handling
+
+If there are any errors, they will be logged in ```TreblleLog.txt```.
   
 
 ## Support
