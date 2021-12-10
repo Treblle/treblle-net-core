@@ -7,10 +7,12 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Treblle.Net.Core
 {
@@ -90,10 +92,36 @@ namespace Treblle.Net.Core
 
                     request.Body = null;
 
-                    if (actionContext.HttpContext.Request.ContentType == "application/json")
+                    try
                     {
-                        string bodyData = actionContext.HttpContext.Request.ReadBodyAsString();
-                        request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData);
+                        if (actionContext.HttpContext.Request.ContentType != null)
+                        {
+                            if (actionContext.HttpContext.Request.ContentType.Contains("application/json"))
+                            {
+                                string bodyData = actionContext.HttpContext.Request.ReadBodyAsString();
+                                request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData);
+                            }
+                            else if (actionContext.HttpContext.Request.ContentType.Contains("text/plain"))
+                            {
+                                request.Body = actionContext.HttpContext.Request.ReadBodyAsString();
+                            }
+                            else if (actionContext.HttpContext.Request.ContentType.Contains("application/xml"))
+                            {
+                                string xmlData = actionContext.HttpContext.Request.ReadBodyAsString();
+
+                                XDocument doc = XDocument.Parse(xmlData);
+                                string jsonText = JsonConvert.SerializeXNode(doc);
+                                request.Body = JsonConvert.DeserializeObject<ExpandoObject>(jsonText);
+                            }
+                            else if (actionContext.HttpContext.Request.HasFormContentType)
+                            {
+                                request.Body = actionContext.HttpContext.Request.Form;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogMessage("An error occured while attempting to read request body. --- Exception message: " + ex.Message, LogMessageType.Error);
                     }
 
                     if (actionContext.HttpContext.Request.Headers != null)
