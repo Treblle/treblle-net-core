@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>Treblle.Net.Core</id>
-    <version>1.0.5</version>
+    <version>1.0.6-beta</version>
     <authors>Treblle</authors>
     <owners>Treblle</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
@@ -15,20 +15,20 @@
     <readme>README.md</readme>
     <repository type="git" url="https://github.com/Treblle/treblle-net-core.git" />
     <dependencies>
-      <group targetFramework=".NETCoreApp3.1">
+      <group targetFramework="net6.0">
         <dependency id="Microsoft.AspNetCore.Mvc.Core" version="2.2.5" exclude="Build,Analyzers" />
         <dependency id="Newtonsoft.Json" version="13.0.1" exclude="Build,Analyzers" />
-        <dependency id="System.Configuration.ConfigurationManager" version="5.0.0" exclude="Build,Analyzers" />
+        <dependency id="System.Configuration.ConfigurationManager" version="6.0.1" exclude="Build,Analyzers" />
       </group>
     </dependencies>
     <frameworkReferences>
-      <group targetFramework=".NETCoreApp3.1">
+      <group targetFramework="net6.0">
         <frameworkReference name="Microsoft.AspNetCore.App" />
       </group>
     </frameworkReferences>
   </metadata>
   <files>
-    <file src="bin\Release\netcoreapp3.1\TreblleNetCore.dll" target="lib\netcoreapp3.1\TreblleNetCore.dll" />
+    <file src="bin\Release\net6.0\TreblleNetCore.dll" target="lib\net6.0\TreblleNetCore.dll" />
     <file src="tools\init.ps1" target="tools\init.ps1" />
     <file src="..\README.md" target="\README.md" />
     <file src="resources\TreblleIcon.png" target="resources\" />

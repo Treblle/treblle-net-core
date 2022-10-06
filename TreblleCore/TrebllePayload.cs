@@ -6,6 +6,10 @@ namespace Treblle.Net.Core
 {
     public class Os
     {
+        public Os()
+        {
+
+        }
         [JsonProperty("name")]
         public string Name { get; set; }
         [JsonProperty("release")]
@@ -16,6 +20,10 @@ namespace Treblle.Net.Core
 
     public class Server
     {
+        public Server()
+        {
+            Os = new Os();
+        }
         [JsonProperty("ip")]
         public string Ip { get; set; }
         [JsonProperty("timezone")]
@@ -32,6 +40,10 @@ namespace Treblle.Net.Core
 
     public class Language
     {
+        public Language()
+        {
+
+        }
         [JsonProperty("name")]
         public string Name { get; set; }
         [JsonProperty("version")]
@@ -40,6 +52,10 @@ namespace Treblle.Net.Core
 
     public class Request
     {
+        public Request()
+        {
+
+        }
         [JsonProperty("timestamp")]
         public string Timestamp { get; set; }
         [JsonProperty("ip")]
@@ -58,6 +74,10 @@ namespace Treblle.Net.Core
 
     public class Error
     {
+        public Error()
+        {
+
+        }
         [JsonProperty("source")]
         public string Source { get; set; }
         [JsonProperty("type")]
@@ -72,6 +92,10 @@ namespace Treblle.Net.Core
 
     public class Response
     {
+        public Response()
+        {
+
+        }
         [JsonProperty("headers")]
         public dynamic Headers { get; set; }
         [JsonProperty("code")]
@@ -86,6 +110,14 @@ namespace Treblle.Net.Core
 
     public class Data
     {
+        public Data()
+        {
+            Server = new Server();
+            Language = new Language();
+            Request = new Request();
+            Response = new Response();
+            Errors = new List<Error>();
+        }
         [JsonProperty("server")]
         public Server Server { get; set; }
         [JsonProperty("language")]
@@ -100,6 +132,10 @@ namespace Treblle.Net.Core
 
     public class TrebllePayload
     {
+        public TrebllePayload()
+        {
+            Data = new Data();
+        }
         [JsonProperty("api_key")]
         public string ApiKey { get; set; }
         [JsonProperty("project_id")]

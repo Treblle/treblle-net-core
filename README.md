@@ -23,7 +23,7 @@ Treblle makes it super easy to understand what’s going on with your APIs and t
 
 ## Requirements
 
-* .NET Core 3.0
+* .NET Core 6.0
 
   
 
@@ -38,8 +38,8 @@ You can install Treblle .NET Core via NuGet Package Manager or by running the fo
 ```bash
 
 dotnet add package Treblle.Net.Core
-
 ```
+
 
   
 
@@ -57,26 +57,47 @@ Here is an example:
 		<add  key="TreblleProjectId"  value="{Your_Project_Id}"  />
 	</appSettings>
 </configuration>
-
 ```
 
-  
+Treblle for .NET 6.0 supports both Minimal APIs and standard Controllers.
 
-Next you'll need to add this to your ``` Configure(IApplicationBuilder app, IWebHostEnvironment env) ``` method in ```Startup.cs```:
+### Using Minimal APIs
+
+You'll need to add Treblle middleware to your ```WebApplication```:
+```csharp
+
+app.UseTreblle();
+```
+
+It's recommended that you add this line before any other middleware. 
+If you want to use a custom exception handler, you can disable the Treblle Exception Handler explicitly in options:
+
+```csharp
+app.UseTreblle(new TreblleOptions() { ExceptionHandlingEnabled = false });
+```
+
+Now you can specify which endpoints you want Treblle to track by using the ```.UseTreblle()``` extension in the Minimal API endpoint definition.
+Example:
+
+```csharp
+
+app.MapGet(...).UseTreblle()
+```
+
+### Using Controllers
+
+You'll need to add this middleware to your ``` Configure(IApplicationBuilder app, IWebHostEnvironment env) ``` method in ```Startup.cs```:
 
   
   
 
 ```csharp
 
-app.Use(next => new  RequestDelegate(
-	async  context =>
-	{
-		context.Request.EnableBuffering();
-		await  next(context);
-	}
-));
-
+app.Use(async (context, next) =>
+{
+	context.Request.EnableBuffering();
+	await next(context);
+});
 ```
 
 Now you can specify which endpoints you want Treblle to track by adding this simple attribute to any API controller or method:
@@ -86,7 +107,6 @@ Now you can specify which endpoints you want Treblle to track by adding this sim
 ```csharp
 
 [Treblle]
-
 ```
 
   
@@ -111,7 +131,6 @@ If you want to expand the list of fields you want to hide, you can pass property
 		<add  key="AdditionalFieldsToMask"  value="secretField,highlySensitiveField"  />
 	</appSettings>
 </configuration>
-
 ```
 
 ## Error handling
