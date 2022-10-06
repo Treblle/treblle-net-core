@@ -36,7 +36,6 @@ Create a FREE account on <https://treblle.com> to get an API key and Project ID.
 You can install Treblle .NET Core via NuGet Package Manager or by running the following command:
 
 ```bash
-
 dotnet add package Treblle.Net.Core
 ```
 
@@ -50,7 +49,6 @@ Here is an example:
   
 
 ```xml
-
 <configuration>
 	<appSettings>
 		<add  key="TreblleApiKey"  value="{Your_API_Key}"  />
@@ -65,7 +63,6 @@ Treblle for .NET 6.0 supports both Minimal APIs and standard Controllers.
 
 You'll need to add Treblle middleware to your ```WebApplication```:
 ```csharp
-
 app.UseTreblle();
 ```
 
@@ -80,7 +77,6 @@ Now you can specify which endpoints you want Treblle to track by using the ```.U
 Example:
 
 ```csharp
-
 app.MapGet(...).UseTreblle()
 ```
 
@@ -92,7 +88,6 @@ You'll need to add this middleware to your ``` Configure(IApplicationBuilder app
   
 
 ```csharp
-
 app.Use(async (context, next) =>
 {
 	context.Request.EnableBuffering();
@@ -105,7 +100,6 @@ Now you can specify which endpoints you want Treblle to track by adding this sim
   
 
 ```csharp
-
 [Treblle]
 ```
 
@@ -123,7 +117,6 @@ If you want to expand the list of fields you want to hide, you can pass property
   
 
 ```xml
-
 <configuration>
 	<appSettings>
 		<add  key="TreblleApiKey"  value="{Your_API_Key}"  />
