@@ -6,6 +6,8 @@ namespace Treblle.Net.Core;
 
 public static class ServiceCollectionExtensions
 {
+    private static readonly Uri DefaultApiUri = new("https://rocknrolla.treblle.com");
+
     public static IServiceCollection AddTreblle(
         this IServiceCollection services,
         string apiKey,
@@ -30,7 +32,12 @@ public static class ServiceCollectionExtensions
             o.ProjectId = projectId;
             o.AdditionalFieldsToMask = additionalFieldsToMask;
         });
-        services.AddHttpClient();
+        services.AddHttpClient("Treblle", httpClient =>
+        {
+            httpClient.BaseAddress = DefaultApiUri;
+
+            httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+        });
 
         return services;
     }

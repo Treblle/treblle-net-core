@@ -28,19 +28,15 @@ internal sealed class TreblleService
         "creditScore"
     };
 
-    private static readonly Uri DefaultApiUri = new("https://rocknrolla.treblle.com");
-
     private readonly HttpClient _httpClient;
     private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TreblleService> _logger;
 
-    public TreblleService(HttpClient httpClient, IOptions<TreblleOptions> treblleOptions, ILogger<TreblleService> logger)
+    public TreblleService(IHttpClientFactory httpClientFactory, IOptions<TreblleOptions> treblleOptions, ILogger<TreblleService> logger)
     {
-        _httpClient = httpClient;
+        _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
         _treblleOptions = treblleOptions.Value;
-
-        _httpClient.DefaultRequestHeaders.Add("x-api-key", _treblleOptions.ApiKey);
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -63,7 +59,7 @@ internal sealed class TreblleService
 
             var maskedJsonPayload = jsonPayload.Mask(SensitiveWords.ToArray(), "*****");
 
-            var httpResponseMessage = await _httpClient.PostAsJsonAsync(DefaultApiUri, maskedJsonPayload);
+            var httpResponseMessage = await _httpClient.PostAsJsonAsync(string.Empty, maskedJsonPayload);
 
             return httpResponseMessage;
         }
