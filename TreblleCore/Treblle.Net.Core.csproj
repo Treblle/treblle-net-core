@@ -3,10 +3,10 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Authors>Treblle</Authors>
-    <Version>1.0.0</Version>
+    <Version>1.0.7</Version>
     <PackageId>Treblle.Net.Core</PackageId>
     <Product>Treblle .NET Core</Product>
-    <Description>Treblle makes it super easy to understand what’s going on with your APIs and the apps that use them.</Description>
+    <Description>Treblle makes it super easy to understand what's going on with your APIs and the apps that use them.</Description>
     <PackageProjectUrl>https://github.com/Treblle/treblle-net-core</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Treblle/treblle-net-core.git</RepositoryUrl>
     <NeutralLanguage></NeutralLanguage>
