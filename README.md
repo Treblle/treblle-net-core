@@ -75,44 +75,67 @@ You can install Treblle .NET Core via NuGet Package Manager or by running the fo
 dotnet add package Treblle.Net.Core
 ```
 
-You will be prompted to enter your Treblle [API key](https://docs.treblle.com/en/dashboard#accessing-your-api-key) and [Project ID](https://docs.treblle.com/en/dashboard/projects#project-id). Your settings will be saved in `app.config` and you can always edit them there.
+### Configuring Treblle
 
-Here is an example:
+You will need to add the required service by calling `AddTreblle` and providing your [API key](https://docs.treblle.com/en/dashboard#accessing-your-api-key) and [Project ID](https://docs.treblle.com/en/dashboard/projects#project-id).
 
-```xml
-
-<configuration>
-	<appSettings>
-		<add  key="TreblleApiKey"  value="{Your_API_Key}"  />
-		<add  key="TreblleProjectId"  value="{Your_Project_Id}"  />
-	</appSettings>
-</configuration>
-
-```
-
-Next you'll need to add this to your `Configure(IApplicationBuilder app, IWebHostEnvironment env)` method in `Startup.cs`:
+Here's an example of configuring the Treblle services and fetching the configuration values from the application settings:
 
 ```csharp
-app.Use(next => new  RequestDelegate(
-	async  context =>
-	{
-		context.Request.EnableBuffering();
-		await  next(context);
-	}
-));
+builder.Services.AddTreblle(
+    builder.Configuration["Treblle:ApiKey"],
+    builder.Configuration["Treblle:ProjectId"]);
 ```
+
+Next you'll need to add the `TreblleMiddleware` by calling `UseTreblle` on the `WebApplication` instance.
+You can optionally configure the use of the exception handler middleware.
+
+```csharp
+app.UseTreblle(useExceptionHandler: true);
+```
+
+**Using Treblle with Controllers**
 
 Now you can specify which endpoints you want Treblle to track by adding this simple attribute to any API controller or method:
 
 ```csharp
-
 [Treblle]
+```
 
+**Using Treblle with Minimal APIs**
+
+To tell Treblle to track your Minimal API endpoints, you have to apply `UseTreblle` to your endpoint definition:
+
+```csharp
+app.MapGet("/", () => "Treblle is awesome")
+    .UseTreblle();
 ```
 
 That's it. Your API requests and responses are now being sent to your Treblle project.
 
 > See the [docs](https://docs.treblle.com/en/integrations/net-core) for this SDK to learn more.
+
+### Masking Additional Fields
+
+If you want to expand the list of fields you want to hide, you can pass property names you want to hide as a CSV string to the `AddTreblle` call:
+
+```csharp
+builder.Services.AddTreblle(
+    builder.Configuration["Treblle:ApiKey"],
+    builder.Configuration["Treblle:ProjectId"],
+    "secretField,highlySensitiveField");
+```
+
+### Running Treblle only in production
+
+If you want to run Treblle only in production, you can rely on the environment variables, or use a similar approach via your application config.
+
+```csharp
+if (app.Environment.IsProduction())
+{
+    app.UseTreblle();
+}
+```
 
 ## Available SDKs
 
