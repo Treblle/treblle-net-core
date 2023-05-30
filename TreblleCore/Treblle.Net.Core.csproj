@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Authors>Treblle</Authors>
-    <Version>1.0.7</Version>
+    <Version>1.0.8</Version>
     <PackageId>Treblle.Net.Core</PackageId>
     <Product>Treblle .NET Core</Product>
     <Description>Treblle makes it super easy to understand what's going on with your APIs and the apps that use them.</Description>
@@ -17,6 +17,7 @@
     <Copyright>Copyright 2021, Treblle Limited</Copyright>
     <RepositoryType>git</RepositoryType>
     <Nullable>enable</Nullable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +37,7 @@
 
   <ItemGroup>
     <None Remove="tools\init.ps1" />
+    <None Include="..\README.md" />
     <None Include="resources\TreblleIcon.png">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
@@ -43,7 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Update="..\README.md" Pack="True" PackagePath="\" />
   </ItemGroup>
 
 </Project>
