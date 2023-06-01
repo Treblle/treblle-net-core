@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <Authors>Treblle</Authors>
-    <Version>1.0.0</Version>
+    <Version>1.0.8</Version>
     <PackageId>Treblle.Net.Core</PackageId>
     <Product>Treblle .NET Core</Product>
-    <Description>Treblle makes it super easy to understand what’s going on with your APIs and the apps that use them.</Description>
+    <Description>Treblle makes it super easy to understand what's going on with your APIs and the apps that use them.</Description>
     <PackageProjectUrl>https://github.com/Treblle/treblle-net-core</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Treblle/treblle-net-core.git</RepositoryUrl>
     <NeutralLanguage></NeutralLanguage>
@@ -16,13 +16,16 @@
     <RootNamespace>Treblle.Net.Core</RootNamespace>
     <Copyright>Copyright 2021, Treblle Limited</Copyright>
     <RepositoryType>git</RepositoryType>
+    <Nullable>enable</Nullable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.App" Version="2.2.8" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="5.0.0" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,14 +37,15 @@
 
   <ItemGroup>
     <None Remove="tools\init.ps1" />
-    <None Include="..\..\..\Downloads\TreblleIcon.png">
+    <None Include="..\README.md" />
+    <None Include="resources\TreblleIcon.png">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
     </None>
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Update="..\README.md" Pack="True" PackagePath="\" />
   </ItemGroup>
 
 </Project>
