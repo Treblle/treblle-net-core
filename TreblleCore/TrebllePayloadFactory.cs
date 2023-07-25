@@ -115,6 +115,7 @@ internal sealed class TrebllePayloadFactory
         {
             if (httpContext.Request.ContentType != null)
             {
+                httpContext.Request.Body.Position = 0;
                 using var requestReader = new StreamReader(httpContext.Request.Body);
                 var bodyData = await requestReader.ReadToEndAsync();
 
