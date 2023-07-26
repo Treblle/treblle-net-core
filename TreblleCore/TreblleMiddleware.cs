@@ -56,13 +56,6 @@ internal class TreblleMiddleware
 
             _stopwatch.Stop();
 
-            if (!httpContext.Response.ContentType.Contains("application/json"))
-            {
-                _logger.LogInformation("Attempted to intercept response but content type was not valid. Treblle only works on JSON APIs.");
-
-                return;
-            }
-
             var payload = await _trebllePayloadFactory.CreateAsync(
                 httpContext,
                 memoryStream,

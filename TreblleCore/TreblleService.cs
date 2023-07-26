@@ -1,12 +1,12 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Json;
+using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Treblle.Net.Core;
 
@@ -59,8 +59,8 @@ internal sealed class TreblleService
 
             var maskedJsonPayload = jsonPayload.Mask(SensitiveWords.ToArray(), "*****");
 
-            var httpResponseMessage = await _httpClient.PostAsJsonAsync(string.Empty, maskedJsonPayload);
-
+            using HttpContent content = new StringContent(maskedJsonPayload, Encoding.UTF8, "application/json");
+            var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
             return httpResponseMessage;
         }
         catch (Exception ex)
