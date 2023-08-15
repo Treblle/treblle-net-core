@@ -28,13 +28,13 @@ internal sealed class TreblleService
         "creditScore"
     };
 
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TreblleService> _logger;
 
     public TreblleService(IHttpClientFactory httpClientFactory, IOptions<TreblleOptions> treblleOptions, ILogger<TreblleService> logger)
     {
-        _httpClient = httpClientFactory.CreateClient("Treblle");
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
         _treblleOptions = treblleOptions.Value;
     }
@@ -43,6 +43,7 @@ internal sealed class TreblleService
     {
         try
         {
+            HttpClient _httpClient = _httpClientFactory.CreateClient("Treblle");
             var jsonPayload = JsonConvert.SerializeObject(payload);
 
             if (!string.IsNullOrWhiteSpace(_treblleOptions.AdditionalFieldsToMask))
