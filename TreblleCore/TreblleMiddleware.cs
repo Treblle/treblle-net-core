@@ -45,7 +45,7 @@ internal class TreblleMiddleware
         {
             httpContext.Request.EnableBuffering();
 
-            var stopwatch = Stopwatch.StartNew();
+            var stopwatch = ValueStopwatch.StartNew();
 
             using var memoryStream = new MemoryStream();
 
@@ -53,12 +53,12 @@ internal class TreblleMiddleware
 
             await _next(httpContext);
 
-            stopwatch.Stop();
+            var elapsed = stopwatch.GetElapsedTime();
 
             var payload = await _trebllePayloadFactory.CreateAsync(
                 httpContext,
                 memoryStream,
-                stopwatch.ElapsedMilliseconds);
+                (long)elapsed.TotalMilliseconds);
 
             memoryStream.Position = 0;
 
