@@ -6,7 +6,7 @@ using System.Diagnostics;
 
 namespace Treblle.Net.Core
 {
-    internal struct ValueStopwatch
+    internal readonly struct ValueStopwatch
     {
         private static readonly double TimestampToTicks = TimeSpan.TicksPerSecond / (double)Stopwatch.Frequency;
 
@@ -17,11 +17,11 @@ namespace Treblle.Net.Core
             _startTimestamp = startTimestamp;
         }
 
-        public bool IsActive => _startTimestamp != 0;
+        public readonly bool IsActive => _startTimestamp != 0;
 
         public static ValueStopwatch StartNew() => new ValueStopwatch(Stopwatch.GetTimestamp());
 
-        public TimeSpan GetElapsedTime()
+        public readonly TimeSpan GetElapsedTime()
         {
             // Start timestamp can't be zero in an initialized ValueStopwatch. It would have to be
             // literally the first thing executed when the machine boots to be 0. So it being 0 is a

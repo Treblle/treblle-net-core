@@ -93,41 +93,25 @@ internal sealed class TrebllePayloadFactory
         }
     }
 
-    private void TryAddRequestHeaders(HttpContext httpContext, TrebllePayload payload)
-    {
-        try
-        {
-            payload.Data.Request.Headers =
-                httpContext.Request.Headers.ToDictionary(x => x.Key, x => string.Join(";", x.Value));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "An error occurred while attempting to read request headers. --- Exception message: {Message}",
-                ex.Message);
-        }
-    }
-
     private async Task TryAddRequestBody(HttpContext httpContext, TrebllePayload payload)
     {
         try
         {
-            if (httpContext.Request.ContentType != null)
+            if (httpContext.Request.ContentType is not null)
             {
                 httpContext.Request.Body.Position = 0;
                 using var requestReader = new StreamReader(httpContext.Request.Body);
                 var bodyData = await requestReader.ReadToEndAsync();
 
-                if (httpContext.Request.ContentType.Contains("application/json"))
+                if (httpContext.Request.ContentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
                 {
                     payload.Data.Request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData);
                 }
-                else if (httpContext.Request.ContentType.Contains("text/plain"))
+                else if (httpContext.Request.ContentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase))
                 {
                     payload.Data.Request.Body = bodyData;
                 }
-                else if (httpContext.Request.ContentType.Contains("application/xml"))
+                else if (httpContext.Request.ContentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
                 {
                     var doc = XDocument.Parse(bodyData);
                     var jsonText = JsonConvert.SerializeXNode(doc);
@@ -165,24 +149,29 @@ internal sealed class TrebllePayloadFactory
             payload.Data.Response.Size = responseContent.Length;
         }
 
-        try
-        {
-            payload.Data.Response.Headers =
-                httpContext.Response.Headers.ToDictionary(x => x.Key, x => string.Join(";", x.Value));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "An error occurred while attempting to read response headers. --- Exception message: {Message}",
-                ex.Message);
-        }
+        TryAddRequestHeaders(httpContext, payload);
 
         payload.Data.Response.Code = httpContext.Response.StatusCode;
         payload.Data.Response.LoadTime = elapsedMilliseconds / (double)1000;
     }
 
-    private void TryAddError(Exception? exception, TrebllePayload payload)
+    private void TryAddRequestHeaders(HttpContext httpContext, TrebllePayload payload)
+    {
+        try
+        {
+            payload.Data.Request.Headers =
+                httpContext.Request.Headers.ToDictionary(x => x.Key, x => string.Join(';', x.Value));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "An error occurred while attempting to read request headers. --- Exception message: {Message}",
+                ex.Message);
+        }
+    }
+
+    private static void TryAddError(Exception? exception, TrebllePayload payload)
     {
         if (exception is null)
         {
@@ -202,15 +191,15 @@ internal sealed class TrebllePayloadFactory
         if (stackTrace.FrameCount > 0)
         {
             var frame = stackTrace.GetFrame(0);
-            if (frame != null)
+
+            if (frame is not null)
             {
                 var line = frame.GetFileLineNumber();
-
                 error.Line = line;
 
                 var file = frame.GetFileName();
 
-                if (file != null)
+                if (file is not null)
                 {
                     error.File = file;
                 }

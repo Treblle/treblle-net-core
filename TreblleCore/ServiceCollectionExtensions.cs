@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
 
         if (string.IsNullOrWhiteSpace(projectId))
         {
-            throw new ArgumentException("The api key is required", nameof(projectId));
+            throw new ArgumentException("The project id is required", nameof(projectId));
         }
 
         services.TryAddTransient<TreblleService>();
@@ -32,10 +32,10 @@ public static class ServiceCollectionExtensions
             o.ProjectId = projectId;
             o.AdditionalFieldsToMask = additionalFieldsToMask;
         });
+
         services.AddHttpClient("Treblle", httpClient =>
         {
             httpClient.BaseAddress = DefaultApiUri;
-
             httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
         });
 

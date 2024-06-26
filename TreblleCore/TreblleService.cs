@@ -35,8 +35,8 @@ internal sealed class TreblleService
     public TreblleService(IHttpClientFactory httpClientFactory, IOptions<TreblleOptions> treblleOptions, ILogger<TreblleService> logger)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
-        _logger = logger;
         _treblleOptions = treblleOptions.Value;
+        _logger = logger;
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -57,7 +57,12 @@ internal sealed class TreblleService
                 }
             }
 
-            var maskedJsonPayload = jsonPayload.Mask(SensitiveWords.ToArray(), "*****");
+            var maskedJsonPayload = jsonPayload.Mask(SensitiveWords, "*****");
+
+            if (maskedJsonPayload is null)
+            {
+                return null;
+            }
 
             using HttpContent content = new StringContent(maskedJsonPayload, Encoding.UTF8, "application/json");
             var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);

@@ -1,6 +1,4 @@
 ﻿using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -11,18 +9,15 @@ internal class TreblleMiddleware
     private readonly RequestDelegate _next;
     private readonly TreblleService _treblleService;
     private readonly TrebllePayloadFactory _trebllePayloadFactory;
-    private readonly ILogger<TreblleMiddleware> _logger;
 
     public TreblleMiddleware(
         RequestDelegate next,
         TreblleService treblleService,
-        TrebllePayloadFactory trebllePayloadFactory,
-        ILogger<TreblleMiddleware> logger)
+        TrebllePayloadFactory trebllePayloadFactory)
     {
         _next = next;
         _treblleService = treblleService;
         _trebllePayloadFactory = trebllePayloadFactory;
-        _logger = logger;
     }
 
     public async Task Invoke(HttpContext httpContext)
