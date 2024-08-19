@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.Dynamic;
 using System.IO;
 using System.Linq;
+using System.Net.Mime;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -26,7 +28,7 @@ internal sealed class TrebllePayloadFactory
 
     internal async Task<TrebllePayload> CreateAsync(
         HttpContext httpContext,
-        Stream? response,
+        MemoryStream? response,
         long elapsedMilliseconds,
         Exception? exception = null)
     {
@@ -60,17 +62,17 @@ internal sealed class TrebllePayloadFactory
 
     private static void AddServer(HttpContext httpContext, TrebllePayload payload)
     {
-        payload.Data.Server.Ip = httpContext.GetServerVariable("LOCAL_ADDR");
+        payload.Data.Server.Ip = httpContext.Connection.LocalIpAddress?.ToString();
         payload.Data.Server.Timezone = (!string.IsNullOrEmpty(TimeZoneInfo.Local.StandardName))
             ? TimeZoneInfo.Local.StandardName
             : "UTC";
         payload.Data.Server.Software = httpContext.GetServerVariable("SERVER_SOFTWARE");
         payload.Data.Server.Signature = null;
-        payload.Data.Server.Protocol = httpContext.GetServerVariable("SERVER_PROTOCOL");
+        payload.Data.Server.Protocol = httpContext.Request.Protocol;
 
         payload.Data.Server.Os.Name = Environment.OSVersion.ToString();
         payload.Data.Server.Os.Release = Environment.OSVersion.Version.ToString();
-        payload.Data.Server.Os.Architecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE");
+        payload.Data.Server.Os.Architecture = RuntimeInformation.ProcessArchitecture.ToString();
     }
 
     private async Task AddRequest(HttpContext httpContext, TrebllePayload payload)
@@ -150,19 +152,26 @@ internal sealed class TrebllePayloadFactory
         }
     }
 
-    private async Task TryAddResponse(HttpContext httpContext, Stream? response, long elapsedMilliseconds, TrebllePayload payload)
+    private async Task TryAddResponse(HttpContext httpContext, MemoryStream? response, long elapsedMilliseconds, TrebllePayload payload)
     {
         if (response is not null)
         {
             response.Position = 0;
 
-            using var responseReader = new StreamReader(response, leaveOpen: true);
+            if (httpContext.Response.ContentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
+            {
+                using var responseReader = new StreamReader(response, leaveOpen: true);
+                var responseContent = await responseReader.ReadToEndAsync();
+                payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
+                payload.Data.Response.Size = responseContent.Length;
+            }
+            else 
+            {
+                var byteArrayContent = response.ToArray();
+                payload.Data.Response.Body = byteArrayContent;
+                payload.Data.Response.Size = byteArrayContent.Length;
+            }
 
-            var responseContent = await responseReader.ReadToEndAsync();
-
-            payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
-
-            payload.Data.Response.Size = responseContent.Length;
         }
 
         try
