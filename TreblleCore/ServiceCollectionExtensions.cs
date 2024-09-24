@@ -11,7 +11,7 @@ namespace Treblle.Net.Core;
 public static class ServiceCollectionExtensions
 {
     private static readonly Uri DefaultApiUri = new("https://rocknrolla.treblle.com");
-    private static readonly HashSet<string> _sensitiveWords = new()
+    private static readonly HashSet<string> s_sensitiveWords = new()
     {
         "password",
         "pwd",
@@ -51,7 +51,7 @@ public static class ServiceCollectionExtensions
             var treblleOptions = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>();
             var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
             
-            return new(httpClientFactory, treblleOptions, _sensitiveWords, logger);
+            return new(httpClientFactory, treblleOptions, s_sensitiveWords, logger);
         });
         
         services.TryAddSingleton<TrebllePayloadFactory>();
@@ -89,27 +89,10 @@ public static class ServiceCollectionExtensions
 
             if (field.Length > 0)
             {
-                var lowerField = ToLowerInvariant(field);
-                _sensitiveWords.Add(lowerField.ToString());
+                s_sensitiveWords.Add(field.ToString());
             }
 
             start += commaIndex + 1; 
         }
-    }
-
-    private static ReadOnlySpan<char> ToLowerInvariant(ReadOnlySpan<char> span)
-    {
-        char[] result = new char[span.Length];
-        int resultIndex = 0;
-
-        for (int i = 0; i < span.Length; i++)
-        {
-            if (!char.IsWhiteSpace(span[i]))
-            {
-                result[resultIndex++] = char.ToLowerInvariant(span[i]);
-            }
-        }
-        
-        return result.AsSpan(0, resultIndex);
     }
 }
