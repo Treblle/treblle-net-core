@@ -1,69 +1,44 @@
-﻿using Newtonsoft.Json;
+﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
 
-namespace Treblle.Net.Core
+namespace Treblle.Net.Core;
+
+public static class JsonMasker
 {
-    public static class JsonMasker
+    public static string? Mask(this string json, HashSet<string> blacklist, string mask)
     {
-        public static string? Mask(this string json, string[] blacklist, string mask)
+        if (string.IsNullOrWhiteSpace(json) || blacklist.Count == 0)
         {
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                return json;
-            }
-
-            if (!blacklist.Any())
-            {
-                return json;
-            }
-
-            if (blacklist.Any() == false)
-            {
-                return json;
-            }
-
-            var jsonObject = JsonConvert.DeserializeObject(json) as JObject;
-
-            MaskFieldsFromJToken(jsonObject, blacklist, mask);
-
-            var result = jsonObject?.ToString();
-
-            return result;
+            return json;
         }
 
-        private static void MaskFieldsFromJToken(JToken? token, string[] blacklist, string mask)
+        var jsonObject = JsonConvert.DeserializeObject(json) as JObject;
+        var blacklistSet = new HashSet<string>(blacklist);
+
+        MaskFieldsFromJToken(jsonObject, blacklistSet, mask);
+
+        return jsonObject?.ToString();
+    }
+
+    private static void MaskFieldsFromJToken(JToken? token, HashSet<string> blacklist, string mask)
+    {
+        if (token is not JContainer container)
         {
-            if (token is not JContainer container)
-            {
-                return;
-            }
+            return;
+        }
 
-            var removeList = new List<JToken>();
-
-            foreach (var jToken in container.Children())
+        foreach (var jToken in container.Children())
+        {
+            if (jToken is JProperty prop)
             {
-                if (jToken is JProperty prop)
+                if (blacklist.Contains(prop.Name))
                 {
-                    var matching = blacklist.Any(item =>
-                        Regex.IsMatch(prop.Path, "(?<=\\.)(\\b" + item + "\\b)(?=\\.?)", RegexOptions.IgnoreCase));
-
-                    if (matching)
-                    {
-                        removeList.Add(jToken);
-                    }
+                    prop.Value = mask;
                 }
-
-                MaskFieldsFromJToken(jToken, blacklist, mask);
             }
 
-            foreach (var el in removeList)
-            {
-                var prop = (JProperty)el;
-                prop.Value = mask;
-            }
+            MaskFieldsFromJToken(jToken, blacklist, mask);
         }
     }
 }
