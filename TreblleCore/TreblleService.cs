@@ -1,42 +1,30 @@
-﻿using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 
 namespace Treblle.Net.Core;
 
 internal sealed class TreblleService
 {
-    private static readonly List<string> SensitiveWords = new()
-    {
-        "password",
-        "pwd",
-        "secret",
-        "password_confirmation",
-        "passwordConfirmation",
-        "cc",
-        "card_number",
-        "cardNumber",
-        "ccv",
-        "ssn",
-        "credit_score",
-        "creditScore"
-    };
-
+    private readonly HashSet<string> _sensitiveWords;
     private readonly HttpClient _httpClient;
     private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TreblleService> _logger;
 
-    public TreblleService(IHttpClientFactory httpClientFactory, IOptions<TreblleOptions> treblleOptions, ILogger<TreblleService> logger)
+    public TreblleService(IHttpClientFactory httpClientFactory, 
+        IOptions<TreblleOptions> treblleOptions, 
+        HashSet<string> sensitiveWords,
+        ILogger<TreblleService> logger)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
         _treblleOptions = treblleOptions.Value;
+        _sensitiveWords = sensitiveWords;
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -45,22 +33,10 @@ internal sealed class TreblleService
         {
             var jsonPayload = JsonConvert.SerializeObject(payload);
 
-            if (!string.IsNullOrWhiteSpace(_treblleOptions.AdditionalFieldsToMask))
-            {
-                var additionalFields = _treblleOptions.AdditionalFieldsToMask.Split(',');
-
-                if (additionalFields.Any())
-                {
-                    var list = additionalFields.ToList();
-
-                    SensitiveWords.AddRange(list);
-                }
-            }
-
-            var maskedJsonPayload = jsonPayload.Mask(SensitiveWords.ToArray(), "*****");
+            var maskedJsonPayload = jsonPayload.Mask(_sensitiveWords, "*****");
 
             using HttpContent content = new StringContent(maskedJsonPayload, Encoding.UTF8, "application/json");
-            var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
+            using var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
             return httpResponseMessage;
         }
         catch (Exception ex)

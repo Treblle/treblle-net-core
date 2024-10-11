@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Treblle.Net.Core;
@@ -12,6 +13,7 @@ internal class TreblleMiddleware
     private readonly TreblleService _treblleService;
     private readonly TrebllePayloadFactory _trebllePayloadFactory;
     private readonly ILogger<TreblleMiddleware> _logger;
+    private readonly Channel<TrebllePayload> _channel = Channel.CreateUnbounded<TrebllePayload>();
 
     public TreblleMiddleware(
         RequestDelegate next,
@@ -23,6 +25,19 @@ internal class TreblleMiddleware
         _treblleService = treblleService;
         _trebllePayloadFactory = trebllePayloadFactory;
         _logger = logger;
+
+        Task.Run(SendPayloadAsync);
+    }
+
+    private async Task SendPayloadAsync()
+    {
+        while(await _channel.Reader.WaitToReadAsync())
+        {
+            while (_channel.Reader.TryRead(out var payload))
+            {
+               await _treblleService.SendPayloadAsync(payload);
+            }
+        }
     }
 
     public async Task Invoke(HttpContext httpContext)
@@ -64,7 +79,7 @@ internal class TreblleMiddleware
 
             await memoryStream.CopyToAsync(originalResponseBody);
 
-            await _treblleService.SendPayloadAsync(payload);
+            _channel.Writer.TryWrite(payload);
         }
         finally
         {
