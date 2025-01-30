@@ -5,34 +5,44 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Treblle.Net.Core.Masking;
+using Treblle.Runtime.Masking;
 
 namespace Treblle.Net.Core;
 
 public static class ServiceCollectionExtensions
 {
     private static readonly Uri DefaultApiUri = new("https://rocknrolla.treblle.com");
-    private static readonly HashSet<string> s_sensitiveWords = new()
+    private static readonly Dictionary<string, string> maskingMap = new()
     {
-        "password",
-        "pwd",
-        "secret",
-        "password_confirmation",
-        "passwordConfirmation",
-        "cc",
-        "card_number",
-        "cardNumber",
-        "ccv",
-        "ssn",
-        "credit_score",
-        "creditScore"
+        { "password", "DefaultStringMasker" },
+        { "pwd", "DefaultStringMasker" },
+        { "secret", "DefaultStringMasker" },
+        { "password_confirmation", "DefaultStringMasker" },
+        { "passwordConfirmation", "DefaultStringMasker" },
+        { "cc", "CreditCardMasker" },
+        { "card_number", "CreditCardMasker" },
+        { "cardNumber", "CreditCardMasker" },
+        { "ccv", "CreditCardMasker" },
+        { "ssn", "SocialSecurityMasker" },
+        { "credit_score", "DefaultStringMasker" },
+        { "creditScore", "DefaultStringMasker" },
+        { "email", "EmailMasker" },
+        { "account.*", "DefaultStringMasker" },
+        { "user.email", "EmailMasker" },
+        { "user.dob", "DateMasker" },
+        { "user.password","DefaultStringMasker" },
+        { "user.ss", "SocialSecurityMasker" },
+        { "user.payments.cc", "CreditCardMasker" }
     };
-    
+   
     public static IServiceCollection AddTreblle(
         this IServiceCollection services,
         string apiKey,
         string projectId,
-        string? additionalFieldsToMask = null)
+        Dictionary<string, string>? FieldsToMaskPairedWithMaskers = null)
     {
+
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             throw new ArgumentException("The api key is required", nameof(apiKey));
@@ -42,16 +52,19 @@ public static class ServiceCollectionExtensions
         {
             throw new ArgumentException("The project key is required", nameof(projectId));
         }
-
-        AddAdditionalSensitiveWords(additionalFieldsToMask);
         
         services.TryAddTransient<TreblleService>( serviceProvider =>
         {
             var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
             var treblleOptions = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>();
             var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
-            
-            return new(httpClientFactory, treblleOptions, s_sensitiveWords, logger);
+
+            if (FieldsToMaskPairedWithMaskers is null)
+            {
+                logger.LogInformation("Using default sensitive words.");
+            }
+
+            return new(httpClientFactory, treblleOptions, FieldsToMaskPairedWithMaskers ?? maskingMap, logger, serviceProvider);
         });
         
         services.TryAddSingleton<TrebllePayloadFactory>();
@@ -59,7 +72,7 @@ public static class ServiceCollectionExtensions
         {
             o.ApiKey = apiKey;
             o.ProjectId = projectId;
-            o.AdditionalFieldsToMask = additionalFieldsToMask;
+            o.FieldsToMaskPairedWithMaskers = FieldsToMaskPairedWithMaskers;
         });
         services.AddHttpClient("Treblle", httpClient =>
         { 
@@ -67,32 +80,13 @@ public static class ServiceCollectionExtensions
             httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
         });
 
+        services.TryAddKeyedTransient<IStringMasker, DefaultStringMasker>(nameof(DefaultStringMasker));
+        services.TryAddKeyedTransient<IStringMasker, EmailMasker>(nameof(EmailMasker));
+        services.TryAddKeyedTransient<IStringMasker, CreditCardMasker>(nameof(CreditCardMasker));
+        services.TryAddKeyedTransient<IStringMasker, SocialSecurityMasker>(nameof(SocialSecurityMasker));
+        services.TryAddKeyedTransient<IStringMasker, DateMasker>(nameof(DateMasker));
+        services.TryAddKeyedTransient<IStringMasker, PostalCodeMatcher>(nameof(PostalCodeMatcher));
+
         return services;
-    }
-    private static void AddAdditionalSensitiveWords(string? additionalFields)
-    {
-        if (string.IsNullOrWhiteSpace(additionalFields)) 
-            return;
-    
-        ReadOnlySpan<char> span = additionalFields.AsSpan();
-        int start = 0;
-
-        while (start < span.Length)
-        {
-            int commaIndex = span.Slice(start).IndexOf(',');
-            if (commaIndex == -1)
-            {
-                commaIndex = span.Length - start;
-            }
-
-            var field = span.Slice(start, commaIndex);
-
-            if (field.Length > 0)
-            {
-                s_sensitiveWords.Add(field.ToString());
-            }
-
-            start += commaIndex + 1; 
-        }
     }
 }

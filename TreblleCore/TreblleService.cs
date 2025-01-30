@@ -6,25 +6,30 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
+using Treblle.Net.Core.Masking;
 
 namespace Treblle.Net.Core;
 
 internal sealed class TreblleService
 {
-    private readonly HashSet<string> _sensitiveWords;
+    private readonly Dictionary<string, string> _maskingMap;
     private readonly HttpClient _httpClient;
     private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TreblleService> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
-    public TreblleService(IHttpClientFactory httpClientFactory, 
-        IOptions<TreblleOptions> treblleOptions, 
-        HashSet<string> sensitiveWords,
-        ILogger<TreblleService> logger)
+    public TreblleService(
+        IHttpClientFactory httpClientFactory,
+        IOptions<TreblleOptions> treblleOptions,
+        Dictionary<string, string> maskingMap,
+        ILogger<TreblleService> logger,
+        IServiceProvider serviceProvider)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
         _treblleOptions = treblleOptions.Value;
-        _sensitiveWords = sensitiveWords;
+        _maskingMap = maskingMap;
+        _serviceProvider = serviceProvider;
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -33,7 +38,7 @@ internal sealed class TreblleService
         {
             var jsonPayload = JsonConvert.SerializeObject(payload);
 
-            var maskedJsonPayload = jsonPayload.Mask(_sensitiveWords, "*****");
+            var maskedJsonPayload = jsonPayload.Mask(_maskingMap, "*****", _serviceProvider);
 
             using HttpContent content = new StringContent(maskedJsonPayload, Encoding.UTF8, "application/json");
             using var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
