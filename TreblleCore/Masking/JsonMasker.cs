@@ -22,7 +22,6 @@ public static class JsonMasker
             return json;
         }
 
-        //var compiledPatterns = CompilePatterns(maskingPatterns);
         MaskFieldsFromJToken(jsonObject, maskingMap, mask, new List<string>(), serviceProvider);
 
         return jsonObject.ToString();
@@ -64,7 +63,6 @@ public static class JsonMasker
                 }
             }
 
-            //MaskFieldsFromJToken(jToken, maskingMap, mask, path, serviceProvider);
         }
     }
 
