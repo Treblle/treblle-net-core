@@ -1,4 +1,6 @@
-﻿namespace Treblle.Net.Core;
+﻿using System.Collections.Generic;
+
+namespace Treblle.Net.Core;
 
 public sealed class TreblleOptions
 {
@@ -6,5 +8,5 @@ public sealed class TreblleOptions
 
     public string ProjectId { get; set; } = string.Empty;
 
-    public string? AdditionalFieldsToMask { get; set; }
+    public Dictionary<string, string>? FieldsToMaskPairedWithMaskers { get; set; }
 }
