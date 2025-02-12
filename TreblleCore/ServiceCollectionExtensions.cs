@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -56,15 +57,18 @@ public static class ServiceCollectionExtensions
         services.TryAddTransient<TreblleService>( serviceProvider =>
         {
             var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
-            var treblleOptions = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>();
             var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
 
             if (FieldsToMaskPairedWithMaskers is null)
             {
                 logger.LogInformation("Using default sensitive words.");
             }
+            else 
+            {
+                maskingMap.Concat(FieldsToMaskPairedWithMaskers);
+            }
 
-            return new(httpClientFactory, treblleOptions, FieldsToMaskPairedWithMaskers ?? maskingMap, logger, serviceProvider);
+            return new(httpClientFactory, maskingMap, logger, serviceProvider);
         });
         
         services.TryAddSingleton<TrebllePayloadFactory>();
@@ -85,7 +89,13 @@ public static class ServiceCollectionExtensions
         services.TryAddKeyedTransient<IStringMasker, CreditCardMasker>(nameof(CreditCardMasker));
         services.TryAddKeyedTransient<IStringMasker, SocialSecurityMasker>(nameof(SocialSecurityMasker));
         services.TryAddKeyedTransient<IStringMasker, DateMasker>(nameof(DateMasker));
-        services.TryAddKeyedTransient<IStringMasker, PostalCodeMatcher>(nameof(PostalCodeMatcher));
+        services.TryAddKeyedTransient<IStringMasker, PostalCodeMasker>(nameof(PostalCodeMasker));
+
+        services.TryAddTransient<DefaultStringMasker, EmailMasker>();
+        services.TryAddTransient<DefaultStringMasker, CreditCardMasker>();
+        services.TryAddTransient<DefaultStringMasker, SocialSecurityMasker>();
+        services.TryAddTransient<DefaultStringMasker, DateMasker>();
+        services.TryAddTransient<DefaultStringMasker, PostalCodeMasker>();
 
         return services;
     }

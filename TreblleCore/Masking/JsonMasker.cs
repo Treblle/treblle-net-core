@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -9,7 +10,7 @@ namespace Treblle.Net.Core.Masking;
 
 public static class JsonMasker
 {
-    public static string? Mask(this string json, Dictionary<string, string> maskingMap, string mask, IServiceProvider serviceProvider)
+    public static string? Mask(this string json, Dictionary<string, string> maskingMap, IServiceProvider serviceProvider, ILogger logger)
     {
         if (string.IsNullOrWhiteSpace(json) || maskingMap.Count == 0)
         {
@@ -22,12 +23,12 @@ public static class JsonMasker
             return json;
         }
 
-        MaskFieldsFromJToken(jsonObject, maskingMap, mask, new List<string>(), serviceProvider);
+        MaskFieldsFromJToken(jsonObject, maskingMap, new List<string>(), serviceProvider, logger);
 
         return jsonObject.ToString();
     }
 
-    private static void MaskFieldsFromJToken(JToken? token, Dictionary<string, string> maskingMap, string mask, List<string> path, IServiceProvider serviceProvider)
+    private static void MaskFieldsFromJToken(JToken? token, Dictionary<string, string> maskingMap, List<string> path, IServiceProvider serviceProvider, ILogger logger)
     {
         if (token is not JContainer container)
         {
@@ -42,10 +43,11 @@ public static class JsonMasker
 
                 if (prop.Value is JContainer)
                 {
-                    MaskFieldsFromJToken(prop.Value, maskingMap, mask, path.Concat(new[] { prop.Name }).ToList(), serviceProvider);
+                    MaskFieldsFromJToken(prop.Value, maskingMap, path.Concat(new[] { prop.Name }).ToList(), serviceProvider, logger);
                 }
-                else
+                else if (prop.Value is not null)
                 {
+                    bool isValueMasked = false;
                     foreach (KeyValuePair<string, string> map in maskingMap)
                     {
 
@@ -53,11 +55,29 @@ public static class JsonMasker
                         {
                             var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
 
-                            if (masker is null)
-                                throw new NullReferenceException("Masker can not be null.");
+                            if (masker is not null)
+                            {
+                                prop.Value = masker.Mask(prop.Value.ToString());
+                                isValueMasked = true;
+                                break;
+                            }
+                            else
+                            {
+                                logger.LogError($"Could not resolve masker for field {currentPath}");
+                            }
+                        }
+                    }
 
-                            prop.Value = masker.Mask(prop.Value.ToString());
-                            break;
+                    // if the value is not masked go over mapping once again to check if value matches any pattern
+                    if (!isValueMasked)
+                    {
+                        foreach (DefaultStringMasker masker in serviceProvider.GetServices(typeof(DefaultStringMasker)))
+                        {
+                            if (masker.IsPatternMatch(prop.Value.ToString()))
+                            {
+                                prop.Value = masker.Mask(prop.Value.ToString());
+                                break;
+                            }
                         }
                     }
                 }

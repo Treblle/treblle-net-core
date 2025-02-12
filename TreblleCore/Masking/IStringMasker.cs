@@ -1,6 +1,8 @@
 ﻿namespace Treblle.Net.Core.Masking;
 
-internal interface IStringMasker
+public interface IStringMasker
 {
+    bool IsPatternMatch(string input);
+
     string Mask(string input);
 }
