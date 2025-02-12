@@ -2,9 +2,13 @@
 
 namespace Treblle.Net.Core.Masking;
 
-
 public class DefaultStringMasker : IStringMasker
 {
+    public virtual bool IsPatternMatch(string input)
+    {
+        return false;
+    }
+
     public virtual string Mask(string input)
     {
         if (string.IsNullOrEmpty(input))

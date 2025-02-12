@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Treblle.Net.Core.Masking;
 
@@ -14,20 +13,17 @@ internal sealed class TreblleService
 {
     private readonly Dictionary<string, string> _maskingMap;
     private readonly HttpClient _httpClient;
-    private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TreblleService> _logger;
     private readonly IServiceProvider _serviceProvider;
 
     public TreblleService(
         IHttpClientFactory httpClientFactory,
-        IOptions<TreblleOptions> treblleOptions,
         Dictionary<string, string> maskingMap,
         ILogger<TreblleService> logger,
         IServiceProvider serviceProvider)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
-        _treblleOptions = treblleOptions.Value;
         _maskingMap = maskingMap;
         _serviceProvider = serviceProvider;
     }
@@ -38,7 +34,7 @@ internal sealed class TreblleService
         {
             var jsonPayload = JsonConvert.SerializeObject(payload);
 
-            var maskedJsonPayload = jsonPayload.Mask(_maskingMap, "*****", _serviceProvider);
+            var maskedJsonPayload = jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
 
             using HttpContent content = new StringContent(maskedJsonPayload, Encoding.UTF8, "application/json");
             using var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
