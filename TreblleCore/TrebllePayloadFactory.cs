@@ -9,6 +9,7 @@ using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Net.Mime;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -34,8 +35,8 @@ internal sealed class TrebllePayloadFactory
     {
         var payload = new TrebllePayload
         {
-            Sdk = "netCore",
-            Version = Environment.Version.ToString(),
+            Sdk = "net-core",
+            Version = GetTrimmedSdkVersion(),
             ProjectId = _treblleOptions.ProjectId,
             ApiKey = _treblleOptions.ApiKey,
         };
@@ -56,13 +57,12 @@ internal sealed class TrebllePayloadFactory
     private static void AddLanguage(TrebllePayload payload)
     {
         payload.Data.Language.Name = "c#";
-        payload.Data.Language.Version =
-            $"{Environment.Version.Major}.{Environment.Version.Minor}.{Environment.Version.Revision}";
+        payload.Data.Language.Version = GetProgrammingLanguageVersion();
     }
 
     private static void AddServer(HttpContext httpContext, TrebllePayload payload)
     {
-        payload.Data.Server.Ip = httpContext.Connection.LocalIpAddress?.ToString();
+        payload.Data.Server.Ip = httpContext.Connection.LocalIpAddress?.MapToIPv4()?.ToString() ?? "bogon";
         payload.Data.Server.Timezone = (!string.IsNullOrEmpty(TimeZoneInfo.Local.StandardName))
             ? TimeZoneInfo.Local.StandardName
             : "UTC";
@@ -79,9 +79,12 @@ internal sealed class TrebllePayloadFactory
     {
         try
         {
-            payload.Data.Request.Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            payload.Data.Request.Ip = httpContext.GetServerVariable("REMOTE_ADDR");
+            payload.Data.Request.Timestamp = DateTime.UtcNow.ToString("yyyy-M-d H:m:s");
+            string serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
+            payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
             payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
+            payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
+            payload.Data.Request.RoutePath = httpContext.Request.Path;
             payload.Data.Request.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
             payload.Data.Request.Method = httpContext.Request.Method;
 
@@ -156,22 +159,34 @@ internal sealed class TrebllePayloadFactory
     {
         if (response is not null)
         {
-            response.Position = 0;
-
-            if (httpContext.Response.ContentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
+            if (httpContext.Response.ContentLength.HasValue && httpContext.Response.ContentLength.Value > 2048)
             {
-                using var responseReader = new StreamReader(response, leaveOpen: true);
-                var responseContent = await responseReader.ReadToEndAsync();
-                payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
-                payload.Data.Response.Size = responseContent.Length;
+                payload.Data.Errors.Add(new Error
+                {
+                    Message = "JSON response size is over 2MB",
+                    Type = "E_USER_ERROR",
+                    File = string.Empty,
+                    Line = 0
+                });
             }
-            else 
+            else
             {
-                var byteArrayContent = response.ToArray();
-                payload.Data.Response.Body = byteArrayContent;
-                payload.Data.Response.Size = byteArrayContent.Length;
-            }
+                response.Position = 0;
 
+                if (httpContext.Response.ContentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
+                {
+                    using var responseReader = new StreamReader(response, leaveOpen: true);
+                    var responseContent = await responseReader.ReadToEndAsync();
+                    payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
+                    payload.Data.Response.Size = httpContext.Response.ContentLength ?? 0;
+                }
+                else
+                {
+                    var byteArrayContent = response.ToArray();
+                    payload.Data.Response.Body = byteArrayContent;
+                    payload.Data.Response.Size = byteArrayContent.Length;
+                }
+            }
         }
 
         try
@@ -188,7 +203,7 @@ internal sealed class TrebllePayloadFactory
         }
 
         payload.Data.Response.Code = httpContext.Response.StatusCode;
-        payload.Data.Response.LoadTime = elapsedMilliseconds / (double)1000;
+        payload.Data.Response.LoadTime = elapsedMilliseconds;
     }
 
     private void TryAddError(Exception? exception, TrebllePayload payload)
@@ -229,5 +244,36 @@ internal sealed class TrebllePayloadFactory
         payload.Data.Errors.Add(error);
 
         payload.Data.Response.Code = StatusCodes.Status500InternalServerError;
+    }
+
+    private static string GetTrimmedSdkVersion()
+    {
+        var versionString = Assembly.GetExecutingAssembly()
+                              .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                              .InformationalVersion;
+
+        // Strip optional suffixes
+        int separatorIndex = versionString.IndexOfAny(['-', '+', ' ']);
+        if (separatorIndex >= 0)
+            versionString = versionString.Substring(0, separatorIndex);
+
+        // Return zeros rather then failing if the version string fails to parse
+        var success = Version.TryParse(versionString, out Version? version) ? version : new Version();
+        
+        return version.Build > 0 ? version.ToString()
+                            : version.Revision > 0 ? $"{version.Major}.{version.Minor}.{version.Build}"
+                            : $"{version.Major}.{version.Minor}";
+
+    }
+
+    private static string GetProgrammingLanguageVersion()
+    {
+            #if NET8_0
+                return "12";
+            #elif NET7_0
+                return "11";
+            #else
+                retrun "10";
+            #endif
     }
 }

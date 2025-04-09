@@ -45,6 +45,10 @@ namespace Treblle.Net.Core
         public string? Ip { get; set; }
         [JsonProperty("url")]
         public string? Url { get; set; }
+        [JsonProperty("route_path")]
+        public string? RoutePath { get; set; }
+        [JsonProperty("query")]
+        public string? Query { get; set; }
         [JsonProperty("user_agent")]
         public string? UserAgent { get; set; }
         [JsonProperty("method")]
