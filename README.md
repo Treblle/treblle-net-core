@@ -119,14 +119,38 @@ That's it. Your API requests and responses are now being sent to your Treblle pr
 
 ### Masking Additional Fields
 
-If you want to expand the list of fields you want to hide, you can pass property names you want to hide as a CSV string to the `AddTreblle` call:
+If you want to expand the list of fields you want to hide, you can pass a list of property names you want to hide and appropriate maskers to use as a key-value pairs to the `AddTreblle` call:
 
 ```csharp
 builder.Services.AddTreblle(
     builder.Configuration["Treblle:ApiKey"],
     builder.Configuration["Treblle:ProjectId"],
-    "secretField,highlySensitiveField");
+    new Dictionary<string, string>( { { "customercreditCard", "CreditCardMasker" }, { "firstName", "DefaultStringMasker" } });
+);
 ```
+
+Available Maskers:
+```csharp
+// DefaultStringMasker
+masker.Mask("Hello World");   // output: ***********
+masker.Mask("1234-5678");     // output:  **********
+// CreditCardMasker
+masker.Mask("1234-5678-1234-5678"); // output:  ****-****-****-5678
+masker.Mask("1234567812345678");    // output: ****-****-****-5678
+//DateMasker
+masker.Mask("24-12-2024");   // output: 24-12-****
+//EmailMasker
+masker.Mask("user123@example.com");  // output: *******@example.com
+//PostalCodeMasker
+masker.Mask("SW1A 1AA");   // output: SW1A ***
+//SocialSecurityMasker
+masker.Mask("123-45-6789");   // output: ***-**-6789
+```
+
+By extending DefaultStringMasker class and implementing IStringMasker interface you can implement custom masking classes for your needs.
+
+
+---
 
 ### Running Treblle only in production
 
