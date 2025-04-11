@@ -28,61 +28,66 @@ public static class JsonMasker
         return jsonObject.ToString();
     }
 
+
     private static void MaskFieldsFromJToken(JToken? token, Dictionary<string, string> maskingMap, List<string> path, IServiceProvider serviceProvider, ILogger logger)
     {
-        if (token is not JContainer container)
+        if (token is JObject obj)
         {
-            return;
-        }
-
-        foreach (var jToken in container.Children())
-        {
-            if (jToken is JProperty prop)
+            foreach (var property in obj.Properties())
             {
-                var currentPath = string.Join(".", path.Concat(new[] { prop.Name }));
+                var currentPath = string.Join(".", path.Concat(new[] { property.Name }));
 
-                if (prop.Value is JContainer)
+                if (property.Value is JObject || property.Value is JArray)
                 {
-                    MaskFieldsFromJToken(prop.Value, maskingMap, path.Concat(new[] { prop.Name }).ToList(), serviceProvider, logger);
+                    MaskFieldsFromJToken(property.Value, maskingMap, path.Concat(new[] { property.Name }).ToList(), serviceProvider, logger);
                 }
-                else if (prop.Value is not null)
+                else
                 {
-                    bool isValueMasked = false;
-                    foreach (KeyValuePair<string, string> map in maskingMap)
-                    {
-
-                        if (shouldMap(map.Key, currentPath))
-                        {
-                            var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
-
-                            if (masker is not null)
-                            {
-                                prop.Value = masker.Mask(prop.Value.ToString());
-                                isValueMasked = true;
-                                break;
-                            }
-                            else
-                            {
-                                logger.LogError($"Could not resolve masker for field {currentPath}");
-                            }
-                        }
-                    }
-
-                    // if the value is not masked go over mapping once again to check if value matches any pattern
-                    if (!isValueMasked)
-                    {
-                        foreach (DefaultStringMasker masker in serviceProvider.GetServices(typeof(DefaultStringMasker)))
-                        {
-                            if (masker.IsPatternMatch(prop.Value.ToString()))
-                            {
-                                prop.Value = masker.Mask(prop.Value.ToString());
-                                break;
-                            }
-                        }
-                    }
+                    maskProperty(property, currentPath, maskingMap, serviceProvider, logger);
                 }
             }
+        }
+        else if (token is JArray array)
+        {
+            for (int i = 0; i < array.Count; i++)
+            {
+                MaskFieldsFromJToken(array[i], maskingMap, path, serviceProvider, logger);
+            }
+        }
+    }
 
+    private static void maskProperty(JProperty property, string currentPath, Dictionary<string, string> maskingMap, IServiceProvider serviceProvider, ILogger logger)
+    {
+        bool isValueMasked = false;
+
+        foreach (var map in maskingMap)
+        {
+            if (shouldMap(map.Key, currentPath))
+            {
+                var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
+                if (masker != null)
+                {
+                    property.Value = masker.Mask(property.Value?.ToString());
+                    isValueMasked = true;
+                    break;
+                }
+                else
+                {
+                    logger.LogError($"Could not resolve masker for field {currentPath}");
+                }
+            }
+        }
+
+        if (!isValueMasked)
+        {
+            foreach (DefaultStringMasker masker in serviceProvider.GetServices(typeof(DefaultStringMasker)))
+            {
+                if (masker.IsPatternMatch(property.Value?.ToString()))
+                {
+                    property.Value = masker.Mask(property.Value?.ToString());
+                    break;
+                }
+            }
         }
     }
 
