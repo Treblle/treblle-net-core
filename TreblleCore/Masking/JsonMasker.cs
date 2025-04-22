@@ -62,7 +62,7 @@ public static class JsonMasker
 
         foreach (var map in maskingMap)
         {
-            if (shouldMap(map.Key, currentPath))
+            if (shouldMask(map.Key, currentPath))
             {
                 var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
                 if (masker != null)
@@ -91,7 +91,7 @@ public static class JsonMasker
         }
     }
 
-    private static bool shouldMap(string sensitiveWord, string path)
+    private static bool shouldMask(string sensitiveWord, string path)
     {
         sensitiveWord = sensitiveWord.ToLower();
         path = path.ToLower();

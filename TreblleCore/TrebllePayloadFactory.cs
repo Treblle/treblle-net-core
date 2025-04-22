@@ -126,7 +126,14 @@ internal sealed class TrebllePayloadFactory
 
                 if (httpContext.Request.ContentType.Contains("application/json"))
                 {
-                    payload.Data.Request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData);
+                    if (IsValidJson(bodyData))
+                    {
+                        payload.Data.Request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData)!;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Invalid JSON detected in request.");
+                    }
                 }
                 else if (httpContext.Request.ContentType.Contains("text/plain"))
                 {
@@ -159,32 +166,44 @@ internal sealed class TrebllePayloadFactory
     {
         if (response is not null)
         {
-            if (httpContext.Response.ContentLength.HasValue && httpContext.Response.ContentLength.Value > 2048)
+            if (httpContext.Response.ContentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) ?? false)
             {
-                payload.Data.Errors.Add(new Error
+                if (httpContext.Response.ContentLength!.Value > 2048)
                 {
-                    Message = "JSON response size is over 2MB",
-                    Type = "E_USER_ERROR",
-                    File = string.Empty,
-                    Line = 0
-                });
-            }
-            else
-            {
-                response.Position = 0;
-
-                if (httpContext.Response.ContentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase))
-                {
-                    using var responseReader = new StreamReader(response, leaveOpen: true);
-                    var responseContent = await responseReader.ReadToEndAsync();
-                    payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
-                    payload.Data.Response.Size = httpContext.Response.ContentLength ?? 0;
+                    payload.Data.Errors.Add(new Error
+                    {
+                        Message = "JSON response size is over 2MB",
+                        Type = "E_USER_ERROR",
+                        File = string.Empty,
+                        Line = 0
+                    });
                 }
                 else
                 {
-                    var byteArrayContent = response.ToArray();
-                    payload.Data.Response.Body = byteArrayContent;
-                    payload.Data.Response.Size = byteArrayContent.Length;
+                    response.Position = 0;
+
+                    {
+                        try
+                        {
+                            using var responseReader = new StreamReader(response, leaveOpen: true);
+                            var responseContent = await responseReader.ReadToEndAsync();
+
+                            if (IsValidJson(responseContent))
+                            {
+                                payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
+                            }
+                            else
+                            {
+                                _logger.LogWarning("Invalid JSON detected in response.");
+                            }
+                            payload.Data.Response.Size = httpContext.Response.ContentLength ?? 0;
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.LogWarning("Error ocurred while reading response content.", e);
+
+                        }
+                    }
                 }
             }
         }
@@ -259,7 +278,7 @@ internal sealed class TrebllePayloadFactory
 
         // Return zeros rather then failing if the version string fails to parse
         var success = Version.TryParse(versionString, out Version? version) ? version : new Version();
-        
+
         return version.Build > 0 ? version.ToString()
                             : version.Revision > 0 ? $"{version.Major}.{version.Minor}.{version.Build}"
                             : $"{version.Major}.{version.Minor}";
@@ -268,12 +287,25 @@ internal sealed class TrebllePayloadFactory
 
     private static string GetProgrammingLanguageVersion()
     {
-            #if NET8_0
-                return "12";
-            #elif NET7_0
+#if NET8_0
+        return "12";
+#elif NET7_0
                 return "11";
-            #else
+#else
                 retrun "10";
-            #endif
+#endif
+    }
+
+    private bool IsValidJson(string str)
+    {
+        try
+        {
+            JsonConvert.DeserializeObject(str);
+            return true;
+        }
+        catch (JsonReaderException)
+        {
+            return false;
+        }
     }
 }
