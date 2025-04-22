@@ -54,12 +54,12 @@ internal class TreblleMiddleware
     private async Task HandleRequestWithTreblleAsync(HttpContext httpContext)
     {
         var originalResponseBody = httpContext.Response.Body;
-
+        ValueStopwatch stopwatch = default;
         try
         {
             httpContext.Request.EnableBuffering();
 
-            var stopwatch = ValueStopwatch.StartNew();
+            stopwatch = ValueStopwatch.StartNew();
 
             using var memoryStream = new MemoryStream();
 
@@ -83,6 +83,9 @@ internal class TreblleMiddleware
         finally
         {
             httpContext.Response.Body = originalResponseBody;
+            var elapsed = stopwatch.GetElapsedTime();
+            var elapsedMiliseconds = (long)elapsed.TotalMilliseconds;
+            httpContext.Items.Add("elapsedMiliseconds", elapsedMiliseconds);
         }
     }
 }

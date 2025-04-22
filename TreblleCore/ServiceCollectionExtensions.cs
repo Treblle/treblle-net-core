@@ -65,7 +65,10 @@ public static class ServiceCollectionExtensions
             }
             else 
             {
-                maskingMap.Concat(FieldsToMaskPairedWithMaskers);
+                foreach (var kv in FieldsToMaskPairedWithMaskers)
+                {
+                    maskingMap[kv.Key] = kv.Value;
+                }
             }
 
             return new(httpClientFactory, maskingMap, logger, serviceProvider);
