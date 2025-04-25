@@ -166,9 +166,9 @@ internal sealed class TrebllePayloadFactory
     {
         if (response is not null)
         {
-            if (httpContext.Response.ContentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) ?? false)
+            if (httpContext.Response?.ContentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) ?? false)
             {
-                if (httpContext.Response.ContentLength!.Value > 2048)
+                if (httpContext.Response.ContentLength.HasValue && httpContext.Response.ContentLength!.Value > 2048)
                 {
                     payload.Data.Errors.Add(new Error
                     {
