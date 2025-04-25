@@ -268,8 +268,9 @@ internal sealed class TrebllePayloadFactory
     private static string GetTrimmedSdkVersion()
     {
         var versionString = Assembly.GetExecutingAssembly()
-                              .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-                              .InformationalVersion;
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion ?? "0.0.0";
+
 
         // Strip optional suffixes
         int separatorIndex = versionString.IndexOfAny(['-', '+', ' ']);
