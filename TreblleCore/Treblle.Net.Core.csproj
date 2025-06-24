@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Authors>Treblle</Authors>
-    <Version>1.2.5</Version>
+    <Version>1.2.6</Version>
     <PackageId>Treblle.Net.Core</PackageId>
     <Product>Treblle .NET Core</Product>
     <Description>Treblle makes it super easy to understand what's going on with your APIs and the apps that use them.</Description>
@@ -18,6 +18,8 @@
     <RepositoryType>git</RepositoryType>
     <Nullable>enable</Nullable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <IncludeSymbols>true</IncludeSymbols>
   </PropertyGroup>
 
   <ItemGroup>
