@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Dynamic;
 using System.IO;
@@ -82,9 +83,9 @@ internal sealed class TrebllePayloadFactory
             payload.Data.Request.Timestamp = DateTime.UtcNow.ToString("yyyy-M-d H:m:s");
             string serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
             payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
-            payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
+            payload.Data.Request.Url = NormalizeFullUrl(httpContext.Request.GetDisplayUrl());
             payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
-            payload.Data.Request.RoutePath = httpContext.Request.Path;
+            payload.Data.Request.RoutePath = NormalizeRoutePath(httpContext.Request.Path);
             payload.Data.Request.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
             payload.Data.Request.Method = httpContext.Request.Method;
 
@@ -309,4 +310,86 @@ internal sealed class TrebllePayloadFactory
             return false;
         }
     }
+
+    private string NormalizeFullUrl(string fullUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fullUrl))
+            return fullUrl;
+
+        // Detect protocol (http or https)
+        var protocolSplit = fullUrl.Split("://", 2, StringSplitOptions.None);
+        if (protocolSplit.Length != 2)
+            return fullUrl; // Not a valid absolute URL
+
+        string scheme = protocolSplit[0] + "://";
+        string remainder = protocolSplit[1];
+
+        // Find the first slash after the domain (i.e., start of path)
+        int pathStartIndex = remainder.IndexOf('/');
+        if (pathStartIndex == -1)
+        {
+            // No path, just return base
+            return scheme + remainder;
+        }
+
+        string domain = remainder.Substring(0, pathStartIndex);
+        string path = remainder.Substring(pathStartIndex);
+
+        string normalizedPath = NormalizeRoutePath(path);
+
+        return scheme + domain + normalizedPath;
+    }
+
+    private string NormalizeRoutePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return path;
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var normalizedSegments = new List<string>();
+
+        for (int i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+
+            bool isGuid = Guid.TryParse(segment, out _);
+            bool isInt = int.TryParse(segment, out _);
+
+            if (isGuid || isInt)
+            {
+                // Look back for the previous static segment to name the placeholder
+                string paramName = "id";
+                if (i > 0)
+                {
+                    var prevSegment = segments[i - 1];
+                    paramName = ToCamelCase(Singularize(prevSegment)) + "Id";
+                }
+
+                normalizedSegments.Add($"{{{paramName}}}");
+            }
+            else
+            {
+                normalizedSegments.Add(segment);
+            }
+        }
+
+        return "/" + string.Join("/", normalizedSegments);
+    }
+
+    private string ToCamelCase(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return value;
+        return char.ToLowerInvariant(value[0]) + value.Substring(1);
+    }
+
+    // Helper to singularize simple plural nouns like "workspaces" -> "workspace"
+    private string Singularize(string plural)
+    {
+        if (plural.EndsWith("ies"))
+            return plural.Substring(0, plural.Length - 3) + "y";
+        if (plural.EndsWith("s") && !plural.EndsWith("ss"))
+            return plural.Substring(0, plural.Length - 1);
+        return plural;
+    }
+
 }
