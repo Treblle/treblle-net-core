@@ -83,7 +83,7 @@ internal sealed class TrebllePayloadFactory
             payload.Data.Request.Timestamp = DateTime.UtcNow.ToString("yyyy-M-d H:m:s");
             string serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
             payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
-            payload.Data.Request.Url = NormalizeFullUrl(httpContext.Request.GetDisplayUrl());
+            payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
             payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
             payload.Data.Request.RoutePath = NormalizeRoutePath(httpContext.Request.Path);
             payload.Data.Request.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
@@ -121,37 +121,99 @@ internal sealed class TrebllePayloadFactory
         {
             if (httpContext.Request.ContentType != null)
             {
-                httpContext.Request.Body.Position = 0;
-                using var requestReader = new StreamReader(httpContext.Request.Body);
-                var bodyData = await requestReader.ReadToEndAsync();
+                var contentType = httpContext.Request.ContentType;
+                var contentDisposition = httpContext.Request.Headers["Content-Disposition"].ToString();
 
-                if (httpContext.Request.ContentType.Contains("application/json"))
+                // Check if it's a raw binary/file-like upload
+                bool isRawFile = IsRawFile(contentDisposition, contentType);
+
+                if (httpContext.Request.Body.CanSeek)
                 {
-                    if (IsValidJson(bodyData))
-                    {
-                        payload.Data.Request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData)!;
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Invalid JSON detected in request.");
-                    }
+                    httpContext.Request.Body.Position = 0;
                 }
-                else if (httpContext.Request.ContentType.Contains("text/plain"))
+
+                if (isRawFile)
                 {
-                    payload.Data.Request.Body = bodyData;
-                }
-                else if (httpContext.Request.ContentType.Contains("application/xml"))
-                {
-                    var doc = XDocument.Parse(bodyData);
-                    var jsonText = JsonConvert.SerializeXNode(doc);
-                    payload.Data.Request.Body = JsonConvert.DeserializeObject<ExpandoObject>(jsonText);
+                    // Just get content length and content type
+                    var length = httpContext.Request.ContentLength ?? 0;
+                    payload.Data.Request.Body = new
+                    {
+                        __type = "file",
+                        length = length,
+                        contentType
+                    };
                 }
                 else if (httpContext.Request.HasFormContentType)
                 {
-                    payload.Data.Request.Body = httpContext.Request.Form;
+                    var form = await httpContext.Request.ReadFormAsync();
+                    var files = form.Files;
+                    var fileList = new List<object>();
+
+                    foreach (var file in files)
+                    {
+                        fileList.Add(new
+                        {
+                            Name = file.FileName,
+                            ContentType = file.ContentType,
+                            Length = file.Length,
+                            FieldName = file.Name
+                        });
+                    }
+
+                    if (fileList.Any())
+                    {
+                        payload.Data.Request.Body = new
+                        {
+                            Files = fileList
+                        };
+                    }
+                    else
+                    {
+                        var formData = form.ToDictionary(k => k.Key, v => v.Value.ToString());
+                        payload.Data.Request.Body = formData;
+                    }
+                }
+                else
+                {
+                    using var requestReader = new StreamReader(httpContext.Request.Body, leaveOpen: true);
+                    var bodyData = await requestReader.ReadToEndAsync();
+
+                    if (contentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (IsValidJson(bodyData))
+                        {
+                            payload.Data.Request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData)!;
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Invalid JSON detected in request.");
+                        }
+                    }
+                    else if (contentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase))
+                    {
+                        payload.Data.Request.Body = bodyData;
+                    }
+                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var doc = XDocument.Parse(bodyData);
+                        var jsonText = JsonConvert.SerializeXNode(doc);
+                        payload.Data.Request.Body = JsonConvert.DeserializeObject<ExpandoObject>(jsonText);
+                    }
+                    else
+                    {
+                        // Non-JSON or unknown types, store minimal info
+                        payload.Data.Request.Body = new
+                        {
+                            __type = "non-json",
+                            contentType
+                        };
+                    }
                 }
 
-                httpContext.Request.Body.Position = 0;
+                if (httpContext.Request.Body.CanSeek)
+                {
+                    httpContext.Request.Body.Position = 0;
+                }
             }
         }
         catch (Exception ex)
@@ -311,33 +373,30 @@ internal sealed class TrebllePayloadFactory
         }
     }
 
-    private string NormalizeFullUrl(string fullUrl)
+    private bool IsRawFile(string contentDisposition, string contentType)
     {
-        if (string.IsNullOrWhiteSpace(fullUrl))
-            return fullUrl;
+        return contentDisposition.Contains("attachment", StringComparison.OrdinalIgnoreCase) ||
+        contentDisposition.Contains("filename", StringComparison.OrdinalIgnoreCase) ||
+        contentType.Contains("application/octet-stream", StringComparison.OrdinalIgnoreCase) ||
+        contentType.Contains("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+        contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+        contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
+        contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
+        contentType.Contains("application/zip", StringComparison.OrdinalIgnoreCase) ||
+        contentType.Contains("text/csv", StringComparison.OrdinalIgnoreCase) ||
 
-        // Detect protocol (http or https)
-        var protocolSplit = fullUrl.Split("://", 2, StringSplitOptions.None);
-        if (protocolSplit.Length != 2)
-            return fullUrl; // Not a valid absolute URL
+        // Microsoft Office formats
+        contentType.Contains("application/vnd.ms-excel", StringComparison.OrdinalIgnoreCase) ||          // .xls
+        contentType.Contains("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase) || // .xlsx
+        contentType.Contains("application/vnd.ms-powerpoint", StringComparison.OrdinalIgnoreCase) ||     // .ppt
+        contentType.Contains("application/vnd.openxmlformats-officedocument.presentationml.presentation", StringComparison.OrdinalIgnoreCase) || // .pptx
+        contentType.Contains("application/vnd.ms-word", StringComparison.OrdinalIgnoreCase) ||           // older .doc
+        contentType.Contains("application/vnd.openxmlformats-officedocument.wordprocessingml.document", StringComparison.OrdinalIgnoreCase) || // .docx
 
-        string scheme = protocolSplit[0] + "://";
-        string remainder = protocolSplit[1];
-
-        // Find the first slash after the domain (i.e., start of path)
-        int pathStartIndex = remainder.IndexOf('/');
-        if (pathStartIndex == -1)
-        {
-            // No path, just return base
-            return scheme + remainder;
-        }
-
-        string domain = remainder.Substring(0, pathStartIndex);
-        string path = remainder.Substring(pathStartIndex);
-
-        string normalizedPath = NormalizeRoutePath(path);
-
-        return scheme + domain + normalizedPath;
+        // Other common binary formats
+        contentType.Contains("application/vnd.oasis.opendocument.", StringComparison.OrdinalIgnoreCase) || // .odt, .ods, etc.
+        contentType.Contains("application/vnd.google-apps", StringComparison.OrdinalIgnoreCase) ||        // Google Drive files
+        contentType.StartsWith("application/vnd.", StringComparison.OrdinalIgnoreCase);
     }
 
     private string NormalizeRoutePath(string path)
