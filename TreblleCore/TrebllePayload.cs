@@ -1,117 +1,117 @@
-﻿using Newtonsoft.Json;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Treblle.Net.Core
 {
     public class Os
     {
-        [JsonProperty("name")]
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
-        [JsonProperty("release")]
+        [JsonPropertyName("release")]
         public string? Release { get; set; }
-        [JsonProperty("architecture")]
+        [JsonPropertyName("architecture")]
         public string? Architecture { get; set; }
     }
 
     public class Server
     {
-        [JsonProperty("ip")]
+        [JsonPropertyName("ip")]
         public string? Ip { get; set; }
-        [JsonProperty("timezone")]
+        [JsonPropertyName("timezone")]
         public string? Timezone { get; set; }
-        [JsonProperty("software")]
+        [JsonPropertyName("software")]
         public string? Software { get; set; }
-        [JsonProperty("signature")]
+        [JsonPropertyName("signature")]
         public string? Signature { get; set; }
-        [JsonProperty("protocol")]
+        [JsonPropertyName("protocol")]
         public string? Protocol { get; set; }
-        [JsonProperty("os")]
+        [JsonPropertyName("os")]
         public Os Os { get; set; } = new();
     }
 
     public class Language
     {
-        [JsonProperty("name")]
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
-        [JsonProperty("version")]
+        [JsonPropertyName("version")]
         public string? Version { get; set; }
     }
 
     public class Request
     {
-        [JsonProperty("timestamp")]
+        [JsonPropertyName("timestamp")]
         public string? Timestamp { get; set; }
-        [JsonProperty("ip")]
+        [JsonPropertyName("ip")]
         public string? Ip { get; set; }
-        [JsonProperty("url")]
+        [JsonPropertyName("url")]
         public string? Url { get; set; }
-        [JsonProperty("route_path")]
+        [JsonPropertyName("route_path")]
         public string? RoutePath { get; set; }
-        [JsonProperty("query")]
+        [JsonPropertyName("query")]
         public string? Query { get; set; }
-        [JsonProperty("user_agent")]
+        [JsonPropertyName("user_agent")]
         public string? UserAgent { get; set; }
-        [JsonProperty("method")]
+        [JsonPropertyName("method")]
         public string? Method { get; set; }
-        [JsonProperty("headers")]
-        public dynamic? Headers { get; set; }
-        [JsonProperty("body")]
-        public dynamic? Body { get; set; }
+        [JsonPropertyName("headers")]
+        public Dictionary<string, object>? Headers { get; set; }
+        [JsonPropertyName("body")]
+        public object? Body { get; set; }
     }
 
     public class Error
     {
-        [JsonProperty("source")]
+        [JsonPropertyName("source")]
         public string? Source { get; set; }
-        [JsonProperty("type")]
+        [JsonPropertyName("type")]
         public string? Type { get; set; }
-        [JsonProperty("message")]
+        [JsonPropertyName("message")]
         public string? Message { get; set; }
-        [JsonProperty("file")]
+        [JsonPropertyName("file")]
         public string? File { get; set; }
-        [JsonProperty("line")]
+        [JsonPropertyName("line")]
         public int Line { get; set; }
     }
 
     public class Response
     {
-        [JsonProperty("headers")]
-        public dynamic? Headers { get; set; }
-        [JsonProperty("code")]
+        [JsonPropertyName("headers")]
+        public Dictionary<string, object>? Headers { get; set; }
+        [JsonPropertyName("code")]
         public int Code { get; set; }
-        [JsonProperty("size")]
+        [JsonPropertyName("size")]
         public long Size { get; set; }
-        [JsonProperty("load_time")]
+        [JsonPropertyName("load_time")]
         public double LoadTime { get; set; }
-        [JsonProperty("body")]
-        public dynamic? Body { get; set; }
+        [JsonPropertyName("body")]
+        public object? Body { get; set; }
     }
 
     public class Data
     {
-        [JsonProperty("server")]
+        [JsonPropertyName("server")]
         public Server Server { get; set; } = new();
-        [JsonProperty("language")]
+        [JsonPropertyName("language")]
         public Language Language { get; set; } = new();
-        [JsonProperty("request")]
+        [JsonPropertyName("request")]
         public Request Request { get; set; } = new();
-        [JsonProperty("response")]
+        [JsonPropertyName("response")]
         public Response Response { get; set; } = new();
-        [JsonProperty("errors")]
+        [JsonPropertyName("errors")]
         public List<Error> Errors { get; set; } = new();
     }
 
     public class TrebllePayload
     {
-        [JsonProperty("api_key")]
+        [JsonPropertyName("api_key")]
         public string? ApiKey { get; set; }
-        [JsonProperty("project_id")]
+        [JsonPropertyName("project_id")]
         public string? ProjectId { get; set; }
-        [JsonProperty("version")]
+        [JsonPropertyName("version")]
         public string? Version { get; set; }
-        [JsonProperty("sdk")]
+        [JsonPropertyName("sdk")]
         public string? Sdk { get; set; }
-        [JsonProperty("data")]
+        [JsonPropertyName("data")]
         public Data Data { get; set; } = new();
     }
 }

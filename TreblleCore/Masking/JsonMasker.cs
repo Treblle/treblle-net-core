@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Treblle.Net.Core.Masking;
 
@@ -17,57 +17,76 @@ public static class JsonMasker
             return json;
         }
 
-        var jsonObject = JsonConvert.DeserializeObject(json) as JObject;
-        if (jsonObject == null)
+        try
+        {
+            var jsonObject = JsonNode.Parse(json) as JsonObject;
+            if (jsonObject == null)
+            {
+                return json;
+            }
+
+            MaskFieldsFromJsonNode(jsonObject, maskingMap, new List<string>(), serviceProvider, logger);
+
+            return jsonObject.ToJsonString();
+        }
+        catch (JsonException)
         {
             return json;
         }
-
-        MaskFieldsFromJToken(jsonObject, maskingMap, new List<string>(), serviceProvider, logger);
-
-        return jsonObject.ToString();
     }
 
-
-    private static void MaskFieldsFromJToken(JToken? token, Dictionary<string, string> maskingMap, List<string> path, IServiceProvider serviceProvider, ILogger logger)
+    private static void MaskFieldsFromJsonNode(JsonNode? token, Dictionary<string, string> maskingMap, List<string> path, IServiceProvider serviceProvider, ILogger logger)
     {
-        if (token is JObject obj)
+        if (token is JsonObject obj)
         {
-            foreach (var property in obj.Properties())
+            var propertiesToUpdate = new Dictionary<string, JsonNode?>();
+            
+            foreach (var property in obj)
             {
-                var currentPath = string.Join(".", path.Concat(new[] { property.Name }));
+                var currentPath = string.Join(".", path.Concat(new[] { property.Key }));
 
-                if (property.Value is JObject || property.Value is JArray)
+                if (property.Value is JsonObject || property.Value is JsonArray)
                 {
-                    MaskFieldsFromJToken(property.Value, maskingMap, path.Concat(new[] { property.Name }).ToList(), serviceProvider, logger);
+                    MaskFieldsFromJsonNode(property.Value, maskingMap, path.Concat(new[] { property.Key }).ToList(), serviceProvider, logger);
                 }
                 else
                 {
-                    maskProperty(property, currentPath, maskingMap, serviceProvider, logger);
+                    var maskedValue = MaskPropertyValue(property.Value, currentPath, maskingMap, serviceProvider, logger);
+                    if (maskedValue != property.Value)
+                    {
+                        propertiesToUpdate[property.Key] = maskedValue;
+                    }
                 }
             }
+            
+            // Update the masked properties
+            foreach (var update in propertiesToUpdate)
+            {
+                obj[update.Key] = update.Value;
+            }
         }
-        else if (token is JArray array)
+        else if (token is JsonArray array)
         {
             for (int i = 0; i < array.Count; i++)
             {
-                MaskFieldsFromJToken(array[i], maskingMap, path, serviceProvider, logger);
+                MaskFieldsFromJsonNode(array[i], maskingMap, path, serviceProvider, logger);
             }
         }
     }
 
-    private static void maskProperty(JProperty property, string currentPath, Dictionary<string, string> maskingMap, IServiceProvider serviceProvider, ILogger logger)
+    private static JsonNode? MaskPropertyValue(JsonNode? propertyValue, string currentPath, Dictionary<string, string> maskingMap, IServiceProvider serviceProvider, ILogger logger)
     {
         bool isValueMasked = false;
+        string? maskedValue = null;
 
         foreach (var map in maskingMap)
         {
-            if (shouldMask(map.Key, currentPath))
+            if (ShouldMask(map.Key, currentPath))
             {
                 var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
                 if (masker != null)
                 {
-                    property.Value = masker.Mask(property.Value?.ToString());
+                    maskedValue = masker.Mask(propertyValue?.ToString());
                     isValueMasked = true;
                     break;
                 }
@@ -82,16 +101,18 @@ public static class JsonMasker
         {
             foreach (DefaultStringMasker masker in serviceProvider.GetServices(typeof(DefaultStringMasker)))
             {
-                if (masker.IsPatternMatch(property.Value?.ToString()))
+                if (masker.IsPatternMatch(propertyValue?.ToString()))
                 {
-                    property.Value = masker.Mask(property.Value?.ToString());
+                    maskedValue = masker.Mask(propertyValue?.ToString());
                     break;
                 }
             }
         }
+
+        return maskedValue != null ? JsonValue.Create(maskedValue) : propertyValue;
     }
 
-    private static bool shouldMask(string sensitiveWord, string path)
+    private static bool ShouldMask(string sensitiveWord, string path)
     {
         sensitiveWord = sensitiveWord.ToLower();
         path = path.ToLower();

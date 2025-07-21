@@ -2,11 +2,13 @@
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Dynamic;
+using System.Text.Json.Nodes;
 using System.IO;
 using System.Linq;
 using System.Net.Mime;
@@ -19,6 +21,16 @@ namespace Treblle.Net.Core;
 
 internal sealed class TrebllePayloadFactory
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = false,
+        PropertyNameCaseInsensitive = false,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TrebllePayloadFactory> _logger;
 
@@ -104,7 +116,7 @@ internal sealed class TrebllePayloadFactory
         try
         {
             payload.Data.Request.Headers =
-                httpContext.Request.Headers.ToDictionary(x => x.Key, x => string.Join(";", x.Value));
+                httpContext.Request.Headers.ToDictionary(x => x.Key, x => (object)string.Join(";", x.Value));
         }
         catch (Exception ex)
         {
@@ -182,7 +194,7 @@ internal sealed class TrebllePayloadFactory
                     {
                         if (IsValidJson(bodyData))
                         {
-                            payload.Data.Request.Body = JsonConvert.DeserializeObject<dynamic>(bodyData)!;
+                            payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(bodyData, JsonOptions);
                         }
                         else
                         {
@@ -196,8 +208,8 @@ internal sealed class TrebllePayloadFactory
                     else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
                     {
                         var doc = XDocument.Parse(bodyData);
-                        var jsonText = JsonConvert.SerializeXNode(doc);
-                        payload.Data.Request.Body = JsonConvert.DeserializeObject<ExpandoObject>(jsonText);
+                        var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), JsonOptions);
+                        payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, JsonOptions);
                     }
                     else
                     {
@@ -231,11 +243,11 @@ internal sealed class TrebllePayloadFactory
         {
             if (httpContext.Response?.ContentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) ?? false)
             {
-                if (httpContext.Response.ContentLength is > 2048)
+                if (httpContext.Response.ContentLength is > 5048)
                 {
                     payload.Data.Errors.Add(new Error
                     {
-                        Message = "JSON response size is over 2MB",
+                        Message = "JSON response size is over 5MB",
                         Type = "E_USER_ERROR",
                         File = string.Empty,
                         Line = 0
@@ -253,7 +265,7 @@ internal sealed class TrebllePayloadFactory
 
                             if (IsValidJson(responseContent))
                             {
-                                payload.Data.Response.Body = JsonConvert.DeserializeObject<dynamic>(responseContent)!;
+                                payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(responseContent, JsonOptions);
                             }
                             else
                             {
@@ -274,7 +286,7 @@ internal sealed class TrebllePayloadFactory
         try
         {
             payload.Data.Response.Headers =
-                httpContext.Response.Headers.ToDictionary(x => x.Key, x => string.Join(";", x.Value));
+                httpContext.Response.Headers.ToDictionary(x => x.Key, x => (object)string.Join(";", x.Value));
         }
         catch (Exception ex)
         {
@@ -364,10 +376,10 @@ internal sealed class TrebllePayloadFactory
     {
         try
         {
-            JsonConvert.DeserializeObject(str);
+            JsonSerializer.Deserialize<JsonElement>(str, JsonOptions);
             return true;
         }
-        catch (JsonReaderException)
+        catch (JsonException)
         {
             return false;
         }
@@ -449,6 +461,60 @@ internal sealed class TrebllePayloadFactory
         if (plural.EndsWith("s") && !plural.EndsWith("ss"))
             return plural.Substring(0, plural.Length - 1);
         return plural;
+    }
+
+    private static object ConvertXDocumentToObject(XDocument doc)
+    {
+        var result = new Dictionary<string, object>();
+        if (doc.Root != null)
+        {
+            result[doc.Root.Name.LocalName] = ConvertXElementToObject(doc.Root);
+        }
+        return result;
+    }
+
+    private static object ConvertXElementToObject(XElement element)
+    {
+        if (!element.HasElements && !element.HasAttributes)
+        {
+            return element.Value;
+        }
+
+        var result = new Dictionary<string, object>();
+        
+        foreach (var attr in element.Attributes())
+        {
+            result[$"@{attr.Name.LocalName}"] = attr.Value;
+        }
+        
+        foreach (var child in element.Elements())
+        {
+            var name = child.Name.LocalName;
+            var value = ConvertXElementToObject(child);
+            
+            if (result.ContainsKey(name))
+            {
+                if (result[name] is List<object> list)
+                {
+                    list.Add(value);
+                }
+                else
+                {
+                    result[name] = new List<object> { result[name], value };
+                }
+            }
+            else
+            {
+                result[name] = value;
+            }
+        }
+        
+        if (!element.HasElements && element.HasAttributes)
+        {
+            result["#text"] = element.Value;
+        }
+        
+        return result;
     }
 
 }
