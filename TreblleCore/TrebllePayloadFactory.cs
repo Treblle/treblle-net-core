@@ -7,8 +7,6 @@ using System.Text.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Dynamic;
-using System.Text.Json.Nodes;
 using System.IO;
 using System.Linq;
 using System.Net.Mime;
@@ -239,9 +237,11 @@ internal sealed class TrebllePayloadFactory
 
     private async Task TryAddResponse(HttpContext httpContext, MemoryStream? response, long elapsedMilliseconds, TrebllePayload payload)
     {
-        if (response is not null)
+        if (response is not null && httpContext.Response?.ContentType is not null)
         {
-            if (httpContext.Response?.ContentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) ?? false)
+            string contentType = httpContext.Response?.ContentType;
+            if (contentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase)
+                || contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase))
             {
                 if (httpContext.Response.ContentLength is > 5048)
                 {
