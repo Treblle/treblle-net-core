@@ -10,6 +10,9 @@ namespace Treblle.Net.Core.Masking
 
         public override bool IsPatternMatch(string input)
         {
+            if (input is null)
+                return false;
+
             return Regex.IsMatch(input, _socialSecurityPattern);
         }
 

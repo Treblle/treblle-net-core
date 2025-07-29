@@ -6,6 +6,9 @@ public class DefaultStringMasker : IStringMasker
 {
     public virtual bool IsPatternMatch(string input)
     {
+        if (input is null)
+            return false;
+
         return false;
     }
 

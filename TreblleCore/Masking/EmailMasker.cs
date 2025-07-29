@@ -9,6 +9,9 @@ public sealed class EmailMasker : DefaultStringMasker ,IStringMasker
 
     public override bool IsPatternMatch(string input)
     {
+        if (input is null)
+            return false;
+
         return Regex.IsMatch(input, _emailPattern);
     }
     string IStringMasker.Mask(string input)

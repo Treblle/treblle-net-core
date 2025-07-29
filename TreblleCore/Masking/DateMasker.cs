@@ -13,6 +13,9 @@ namespace Treblle.Runtime.Masking
 
         public override bool IsPatternMatch(string input)
         {
+            if (input is null)
+                return false;
+
             return Regex.IsMatch(input, _datePatternSlashes) || Regex.IsMatch(input, _datePatternSlashesYearFirst) ||
                             (Regex.IsMatch(input, _datePatternDashes) || Regex.IsMatch(input, _datePatternDashesYearFirst));
         }
