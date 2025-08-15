@@ -149,6 +149,24 @@ masker.Mask("123-45-6789");   // output: ***-**-6789
 
 By extending DefaultStringMasker class and implementing IStringMasker interface you can implement custom masking classes for your needs.
 
+### Disabling Data Masking
+
+For high-volume scenarios where data masking is not required, you can disable it entirely to significantly improve performance and reduce memory usage:
+
+```csharp
+// Option 1: Via AddTreblle parameter
+builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID", null, disableMasking: true);
+
+// Option 2: Via configuration options
+builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID");
+builder.Services.Configure<TreblleOptions>(options =>
+{
+    options.DisableMasking = true;
+});
+```
+
+**Performance Impact:** Disabling masking can reduce memory usage by up to 70% for large payloads, as it skips JSON parsing, object tree creation, and field processing operations. This is particularly beneficial for APIs handling large response bodies or high request volumes.
+
 
 ---
 

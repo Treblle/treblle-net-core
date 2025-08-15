@@ -113,8 +113,13 @@ internal sealed class TrebllePayloadFactory
     {
         try
         {
-            payload.Data.Request.Headers =
-                httpContext.Request.Headers.ToDictionary(x => x.Key, x => (object)string.Join(";", x.Value));
+            // Pre-allocate dictionary with known capacity to reduce allocations
+            var headers = new Dictionary<string, object>(httpContext.Request.Headers.Count);
+            foreach (var header in httpContext.Request.Headers)
+            {
+                headers[header.Key] = string.Join(";", header.Value);
+            }
+            payload.Data.Request.Headers = headers;
         }
         catch (Exception ex)
         {
@@ -133,6 +138,21 @@ internal sealed class TrebllePayloadFactory
             {
                 var contentType = httpContext.Request.ContentType;
                 var contentDisposition = httpContext.Request.Headers["Content-Disposition"].ToString();
+
+                // Early size check to prevent large request bodies from consuming memory
+                const long maxRequestSize = 5 * 1024 * 1024; // 5MB
+                var requestLength = httpContext.Request.ContentLength ?? 0;
+                
+                if (requestLength > maxRequestSize)
+                {
+                    payload.Data.Request.Body = new
+                    {
+                        __message = "Request data was larger than 5MB",
+                        __size = requestLength,
+                        __type = "large_request"
+                    };
+                    return;
+                }
 
                 // Check if it's a raw binary/file-like upload
                 bool isRawFile = IsRawFile(contentDisposition, contentType);
@@ -243,15 +263,18 @@ internal sealed class TrebllePayloadFactory
             if (contentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase)
                 || contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase))
             {
-                if (httpContext.Response.ContentLength is > 5048)
+                // Align with total payload limit of 5MB
+                const long maxResponseSize = 5 * 1024 * 1024; // 5MB
+                var responseLength = httpContext.Response.ContentLength ?? response.Length;
+                
+                if (responseLength > maxResponseSize)
                 {
-                    payload.Data.Errors.Add(new Error
+                    payload.Data.Response.Body = new
                     {
-                        Message = "JSON response size is over 5MB",
-                        Type = "E_USER_ERROR",
-                        File = string.Empty,
-                        Line = 0
-                    });
+                        __message = "Response data was larger than 5MB",
+                        __size = responseLength,
+                        __type = "large_response"
+                    };
                 }
                 else
                 {
@@ -417,7 +440,9 @@ internal sealed class TrebllePayloadFactory
             return path;
 
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var normalizedSegments = new List<string>();
+        
+        // Pre-allocate with known capacity to avoid resizing
+        var normalizedSegments = new List<string>(segments.Length);
 
         for (int i = 0; i < segments.Length; i++)
         {

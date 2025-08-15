@@ -26,17 +26,20 @@ internal sealed class TreblleService
     private readonly HttpClient _httpClient;
     private readonly ILogger<TreblleService> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly bool _disableMasking;
 
     public TreblleService(
         IHttpClientFactory httpClientFactory,
         Dictionary<string, string> maskingMap,
         ILogger<TreblleService> logger,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        bool disableMasking = false)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
         _maskingMap = maskingMap;
         _serviceProvider = serviceProvider;
+        _disableMasking = disableMasking;
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -82,9 +85,11 @@ internal sealed class TreblleService
                 jsonPayload = JsonSerializer.Serialize(reducedPayload, JsonOptions);
             }
 
-            var maskedJsonPayload = jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
+            var finalJsonPayload = _disableMasking 
+                ? jsonPayload 
+                : jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
 
-            using HttpContent content = new StringContent(maskedJsonPayload, Encoding.UTF8, "application/json");
+            using HttpContent content = new StringContent(finalJsonPayload, Encoding.UTF8, "application/json");
             using var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
             return httpResponseMessage;
         }

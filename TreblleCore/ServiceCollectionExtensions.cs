@@ -41,7 +41,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         string apiKey,
         string projectId,
-        Dictionary<string, string>? FieldsToMaskPairedWithMaskers = null)
+        Dictionary<string, string>? FieldsToMaskPairedWithMaskers = null,
+        bool disableMasking = false)
     {
 
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -58,8 +59,13 @@ public static class ServiceCollectionExtensions
         {
             var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
             var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
+            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
 
-            if (FieldsToMaskPairedWithMaskers is null)
+            if (options.DisableMasking)
+            {
+                logger.LogInformation("Data masking is disabled for improved performance.");
+            }
+            else if (FieldsToMaskPairedWithMaskers is null)
             {
                 logger.LogInformation("Using default sensitive words.");
             }
@@ -71,7 +77,7 @@ public static class ServiceCollectionExtensions
                 }
             }
 
-            return new(httpClientFactory, maskingMap, logger, serviceProvider);
+            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking);
         });
         
         services.TryAddSingleton<TrebllePayloadFactory>();
@@ -80,6 +86,7 @@ public static class ServiceCollectionExtensions
             o.ApiKey = apiKey;
             o.ProjectId = projectId;
             o.FieldsToMaskPairedWithMaskers = FieldsToMaskPairedWithMaskers;
+            o.DisableMasking = disableMasking;
         });
         services.AddHttpClient("Treblle", httpClient =>
         { 
