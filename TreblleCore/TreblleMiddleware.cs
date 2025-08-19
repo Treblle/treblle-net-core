@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -102,15 +105,13 @@ internal class TreblleMiddleware
     private async Task HandleRequestWithTreblleAsync(HttpContext httpContext)
     {
         var originalResponseBody = httpContext.Response.Body;
-        ValueStopwatch stopwatch = default;
+        var stopwatch = Stopwatch.StartNew();
         MemoryStream? memoryStream = null;
         bool shouldCaptureResponse = true;
         
         try
         {
             httpContext.Request.EnableBuffering();
-
-            stopwatch = ValueStopwatch.StartNew();
 
             // Check if we should capture response based on expected size
             const long maxResponseSize = 5 * 1024 * 1024; // 5MB
@@ -130,28 +131,41 @@ internal class TreblleMiddleware
 
             await _next(httpContext);
 
-            var elapsed = stopwatch.GetElapsedTime();
-
-            var payload = await _trebllePayloadFactory.CreateAsync(
-                httpContext,
-                memoryStream,
-                (long)elapsed.TotalMilliseconds);
-
             if (memoryStream != null)
             {
                 memoryStream.Position = 0;
                 await memoryStream.CopyToAsync(originalResponseBody);
             }
-
-            _channel.Writer.TryWrite(payload);
         }
         finally
         {
             httpContext.Response.Body = originalResponseBody;
-            memoryStream?.Dispose();
-            var elapsed = stopwatch.GetElapsedTime();
-            var elapsedMiliseconds = (long)elapsed.TotalMilliseconds;
+            stopwatch.Stop();
+            var elapsedMiliseconds = stopwatch.ElapsedMilliseconds;
             httpContext.Items.Add("elapsedMiliseconds", elapsedMiliseconds);
+
+            // Create and send payload with accurate timing that includes response stream copy
+            if (httpContext.GetEndpoint()?.Metadata.GetMetadata<TreblleAttribute>() is not null)
+            {
+                try
+                {
+                    _logger.LogDebug("Treblle timing: {ElapsedMs}ms", elapsedMiliseconds);
+                    
+                    var payload = await _trebllePayloadFactory.CreateAsync(
+                        httpContext,
+                        memoryStream,
+                        elapsedMiliseconds);
+
+                    _channel.Writer.TryWrite(payload);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to create Treblle payload");
+                }
+            }
+
+            // Dispose memory stream after payload creation
+            memoryStream?.Dispose();
         }
     }
 }

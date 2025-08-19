@@ -16,7 +16,7 @@ namespace Treblle.Net.Core.Masking
             return Regex.IsMatch(input, _socialSecurityPattern);
         }
 
-        public string Mask(string input)
+        public override string Mask(string input)
         {
             if (string.IsNullOrEmpty(input))
                 return string.Empty;

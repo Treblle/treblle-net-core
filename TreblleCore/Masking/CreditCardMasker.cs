@@ -16,7 +16,7 @@ namespace Treblle.Runtime.Masking
             return Regex.IsMatch(input, _creditCardPattern);
         }
 
-        public string Mask(string input)
+        public override string Mask(string input)
         {
             if (string.IsNullOrEmpty(input))
                 return string.Empty;

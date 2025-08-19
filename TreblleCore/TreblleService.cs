@@ -89,7 +89,7 @@ internal sealed class TreblleService
                 ? jsonPayload 
                 : jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
 
-            using HttpContent content = new StringContent(finalJsonPayload, Encoding.UTF8, "application/json");
+            using HttpContent content = new StringContent(finalJsonPayload ?? string.Empty, Encoding.UTF8, "application/json");
             using var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
             return httpResponseMessage;
         }

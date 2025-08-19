@@ -23,7 +23,7 @@ public static class ApplicationBuilderExtensions
 
                     var trebllePayloadFactory = httpContext.RequestServices.GetRequiredService<TrebllePayloadFactory>();
 
-                    var elapsedMiliseconds = (long)httpContext.Items["elapsedMiliseconds"];
+                    var elapsedMiliseconds = (long)(httpContext.Items["elapsedMiliseconds"] ?? 0L);
 
                     var payload = await trebllePayloadFactory.CreateAsync(
                         httpContext,

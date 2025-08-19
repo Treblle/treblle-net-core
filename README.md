@@ -79,14 +79,22 @@ dotnet add package Treblle.Net.Core
 
 ### Configuring Treblle
 
-You will need to add the required service by calling `AddTreblle` and providing your [API key](https://docs.treblle.com/en/dashboard#accessing-your-api-key) and [Project ID](https://docs.treblle.com/en/dashboard/projects#project-id).
+You will need to add the required service by calling `AddTreblle` and providing your [SDK Token](https://docs.treblle.com/en/dashboard#accessing-your-api-key) and [API Key](https://docs.treblle.com/en/dashboard/projects#project-id).
 
 Here's an example of configuring the Treblle services and fetching the configuration values from the application settings:
 
+**New Configuration (v1.3.4+):**
 ```csharp
 builder.Services.AddTreblle(
-    builder.Configuration["Treblle:ApiKey"],
-    builder.Configuration["Treblle:ProjectId"]);
+    builder.Configuration["Treblle:SdkToken"],  // SDK Token for authentication
+    builder.Configuration["Treblle:ApiKey"]);   // API Key for project identification
+```
+
+**Legacy Configuration (still supported but deprecated):**
+```csharp
+builder.Services.AddTreblle(
+    builder.Configuration["Treblle:ApiKey"],    // Legacy: maps to SDK Token
+    builder.Configuration["Treblle:ProjectId"]); // Legacy: maps to API Key
 ```
 
 Next you'll need to add the `TreblleMiddleware` by calling `UseTreblle` on the `WebApplication` instance.
@@ -121,6 +129,16 @@ That's it. Your API requests and responses are now being sent to your Treblle pr
 
 If you want to expand the list of fields you want to hide, you can pass a list of property names you want to hide and appropriate maskers to use as a key-value pairs to the `AddTreblle` call:
 
+**New Configuration:**
+```csharp
+builder.Services.AddTreblle(
+    builder.Configuration["Treblle:SdkToken"],
+    builder.Configuration["Treblle:ApiKey"],
+    new Dictionary<string, string>( { { "customercreditCard", "CreditCardMasker" }, { "firstName", "DefaultStringMasker" } });
+);
+```
+
+**Legacy Configuration:**
 ```csharp
 builder.Services.AddTreblle(
     builder.Configuration["Treblle:ApiKey"],
@@ -153,11 +171,25 @@ By extending DefaultStringMasker class and implementing IStringMasker interface 
 
 For high-volume scenarios where data masking is not required, you can disable it entirely to significantly improve performance and reduce memory usage:
 
+**New Configuration:**
 ```csharp
 // Option 1: Via AddTreblle parameter
-builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID", null, disableMasking: true);
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", null, disableMasking: true);
 
 // Option 2: Via configuration options
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY");
+builder.Services.Configure<TreblleOptions>(options =>
+{
+    options.DisableMasking = true;
+});
+```
+
+**Legacy Configuration:**
+```csharp
+// Option 1: Via AddTreblle parameter (deprecated)
+builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID", null, disableMasking: true);
+
+// Option 2: Via configuration options (deprecated)
 builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID");
 builder.Services.Configure<TreblleOptions>(options =>
 {
@@ -167,6 +199,46 @@ builder.Services.Configure<TreblleOptions>(options =>
 
 **Performance Impact:** Disabling masking can reduce memory usage by up to 70% for large payloads, as it skips JSON parsing, object tree creation, and field processing operations. This is particularly beneficial for APIs handling large response bodies or high request volumes.
 
+## Upgrading to v1.3.4+
+
+Starting with version 1.3.4, we've updated the parameter naming conventions to better reflect their purpose:
+
+### Breaking Changes
+- **Parameter names changed**: `AddTreblle(apiKey, projectId)` → `AddTreblle(sdkToken, apiKey)`
+- **Payload mapping**: 
+  - `sdkToken` parameter → sent as `api_key` in payload
+  - `apiKey` parameter → sent as `project_id` in payload
+
+### Migration Guide
+
+**Before (v1.3.3 and earlier):**
+```csharp
+builder.Services.AddTreblle("your-api-key", "your-project-id");
+```
+
+**After (v1.3.4+):**
+```csharp
+builder.Services.AddTreblle("your-api-key", "your-project-id"); // Same values, new meaning
+```
+
+### Important Notes
+- **No code changes required**: The same method signature still works due to backward compatibility
+- **Values stay the same**: Use the same credential values you've always used
+- **Payload format unchanged**: The data sent to Treblle remains exactly the same
+- **Deprecation warnings**: You may see obsolete warnings encouraging you to use the new naming convention
+
+### New Recommended Usage
+For new implementations, we recommend using the new naming convention for clarity:
+
+```csharp
+// Configuration keys that clearly indicate their purpose
+builder.Services.AddTreblle(
+    builder.Configuration["Treblle:SdkToken"],  // Your SDK authentication token
+    builder.Configuration["Treblle:ApiKey"]);   // Your API project identifier
+```
+
+### Backward Compatibility
+The legacy method signature is fully supported and will continue to work. The deprecation warnings are informational only and won't affect functionality.
 
 ---
 

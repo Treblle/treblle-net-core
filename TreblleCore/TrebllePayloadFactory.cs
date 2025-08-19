@@ -10,7 +10,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Mime;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -47,9 +46,10 @@ internal sealed class TrebllePayloadFactory
         var payload = new TrebllePayload
         {
             Sdk = "net-core",
-            Version = GetTrimmedSdkVersion(),
-            ProjectId = _treblleOptions.ProjectId,
-            ApiKey = _treblleOptions.ApiKey,
+            Version = TreblleConstants.PayloadVersion,
+            // Map new properties to legacy payload field names for backward compatibility
+            ProjectId = GetEffectiveApiKey(), // ApiKey from config -> project_id in payload
+            ApiKey = GetEffectiveSdkToken(),  // SdkToken from config -> api_key in payload
         };
 
         AddLanguage(payload);
@@ -63,6 +63,40 @@ internal sealed class TrebllePayloadFactory
         TryAddError(exception, payload);
 
         return payload;
+    }
+
+    /// <summary>
+    /// Gets the effective SDK token, handling backward compatibility
+    /// </summary>
+    private string GetEffectiveSdkToken()
+    {
+        // Priority: SdkToken > LegacyApiKey (for backward compatibility)
+        if (!string.IsNullOrEmpty(_treblleOptions.SdkToken))
+            return _treblleOptions.SdkToken;
+        
+        #pragma warning disable CS0618 // Type or member is obsolete
+        if (!string.IsNullOrEmpty(_treblleOptions.LegacyApiKey))
+            return _treblleOptions.LegacyApiKey;
+        #pragma warning restore CS0618 // Type or member is obsolete
+        
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Gets the effective API key, handling backward compatibility
+    /// </summary>
+    private string GetEffectiveApiKey()
+    {
+        // Priority: ApiKey > ProjectId (for backward compatibility)
+        if (!string.IsNullOrEmpty(_treblleOptions.ApiKey))
+            return _treblleOptions.ApiKey;
+        
+        #pragma warning disable CS0618 // Type or member is obsolete
+        if (!string.IsNullOrEmpty(_treblleOptions.ProjectId))
+            return _treblleOptions.ProjectId;
+        #pragma warning restore CS0618 // Type or member is obsolete
+        
+        return string.Empty;
     }
 
     private static void AddLanguage(TrebllePayload payload)
@@ -91,7 +125,7 @@ internal sealed class TrebllePayloadFactory
         try
         {
             payload.Data.Request.Timestamp = DateTime.UtcNow.ToString("yyyy-M-d H:m:s");
-            string serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
+            string? serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
             payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
             payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
             payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
@@ -117,7 +151,7 @@ internal sealed class TrebllePayloadFactory
             var headers = new Dictionary<string, object>(httpContext.Request.Headers.Count);
             foreach (var header in httpContext.Request.Headers)
             {
-                headers[header.Key] = string.Join(";", header.Value);
+                headers[header.Key] = string.Join(";", header.Value.ToArray());
             }
             payload.Data.Request.Headers = headers;
         }
@@ -259,13 +293,13 @@ internal sealed class TrebllePayloadFactory
     {
         if (response is not null && httpContext.Response?.ContentType is not null)
         {
-            string contentType = httpContext.Response?.ContentType;
-            if (contentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase)
-                || contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase))
+            string? contentType = httpContext.Response?.ContentType;
+            if (contentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) == true
+                || contentType?.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase) == true)
             {
                 // Align with total payload limit of 5MB
                 const long maxResponseSize = 5 * 1024 * 1024; // 5MB
-                var responseLength = httpContext.Response.ContentLength ?? response.Length;
+                var responseLength = httpContext.Response?.ContentLength ?? response.Length;
                 
                 if (responseLength > maxResponseSize)
                 {
@@ -275,6 +309,7 @@ internal sealed class TrebllePayloadFactory
                         __size = responseLength,
                         __type = "large_response"
                     };
+                    payload.Data.Response.Size = responseLength;
                 }
                 else
                 {
@@ -294,11 +329,11 @@ internal sealed class TrebllePayloadFactory
                             {
                                 _logger.LogWarning("Invalid JSON detected in response.");
                             }
-                            payload.Data.Response.Size = httpContext.Response.ContentLength ?? 0;
+                            payload.Data.Response.Size = response.Length;
                         }
                         catch (Exception e)
                         {
-                            _logger.LogWarning("Error ocurred while reading response content.", e);
+                            _logger.LogWarning(e, "Error ocurred while reading response content.");
 
                         }
                     }
@@ -309,7 +344,7 @@ internal sealed class TrebllePayloadFactory
         try
         {
             payload.Data.Response.Headers =
-                httpContext.Response.Headers.ToDictionary(x => x.Key, x => (object)string.Join(";", x.Value));
+                httpContext.Response?.Headers?.ToDictionary(x => x.Key, x => (object)string.Join(";", x.Value.ToArray())) ?? new Dictionary<string, object>();
         }
         catch (Exception ex)
         {
@@ -319,8 +354,14 @@ internal sealed class TrebllePayloadFactory
                 ex.Message);
         }
 
-        payload.Data.Response.Code = httpContext.Response.StatusCode;
+        payload.Data.Response.Code = httpContext.Response?.StatusCode ?? 500;
         payload.Data.Response.LoadTime = elapsedMilliseconds;
+        
+        // Set response size if not already set
+        if (payload.Data.Response.Size == 0)
+        {
+            payload.Data.Response.Size = response?.Length ?? httpContext.Response?.ContentLength ?? 0;
+        }
     }
 
     private void TryAddError(Exception? exception, TrebllePayload payload)
@@ -363,26 +404,6 @@ internal sealed class TrebllePayloadFactory
         payload.Data.Response.Code = StatusCodes.Status500InternalServerError;
     }
 
-    private static string GetTrimmedSdkVersion()
-    {
-        var versionString = Assembly.GetExecutingAssembly()
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion ?? "0.0.0";
-
-
-        // Strip optional suffixes
-        int separatorIndex = versionString.IndexOfAny(['-', '+', ' ']);
-        if (separatorIndex >= 0)
-            versionString = versionString.Substring(0, separatorIndex);
-
-        // Return zeros rather then failing if the version string fails to parse
-        var success = Version.TryParse(versionString, out Version? version) ? version : new Version();
-
-        return version.Build > 0 ? version.ToString()
-                            : version.Revision > 0 ? $"{version.Major}.{version.Minor}.{version.Build}"
-                            : $"{version.Major}.{version.Minor}";
-
-    }
 
     private static string GetProgrammingLanguageVersion()
     {

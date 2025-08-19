@@ -86,7 +86,7 @@ public static class JsonMasker
                 var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
                 if (masker != null)
                 {
-                    maskedValue = masker.Mask(propertyValue?.ToString());
+                    maskedValue = masker.Mask(propertyValue?.ToString() ?? string.Empty);
                     isValueMasked = true;
                     break;
                 }
@@ -99,11 +99,11 @@ public static class JsonMasker
 
         if (!isValueMasked)
         {
-            foreach (DefaultStringMasker masker in serviceProvider.GetServices(typeof(DefaultStringMasker)))
+            foreach (DefaultStringMasker? masker in serviceProvider.GetServices(typeof(DefaultStringMasker)))
             {
-                if (masker.IsPatternMatch(propertyValue?.ToString()))
+                if (masker?.IsPatternMatch(propertyValue?.ToString() ?? string.Empty) == true)
                 {
-                    maskedValue = masker.Mask(propertyValue?.ToString());
+                    maskedValue = masker?.Mask(propertyValue?.ToString() ?? string.Empty) ?? string.Empty;
                     break;
                 }
             }

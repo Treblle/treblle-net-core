@@ -108,7 +108,7 @@ namespace Treblle.Net.Core
         [JsonPropertyName("project_id")]
         public string? ProjectId { get; set; }
         [JsonPropertyName("version")]
-        public string? Version { get; set; }
+        public int Version { get; set; }
         [JsonPropertyName("sdk")]
         public string? Sdk { get; set; }
         [JsonPropertyName("data")]

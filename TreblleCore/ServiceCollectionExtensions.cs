@@ -37,22 +37,33 @@ public static class ServiceCollectionExtensions
         { "user.payments.cc", "CreditCardMasker" }
     };
    
+    /// <summary>
+    /// Adds Treblle SDK to the service collection.
+    /// Parameter names changed in v1.3.4+ for clarity, but accepts same credential values.
+    /// </summary>
+    /// <param name="services">The service collection</param>
+    /// <param name="sdkToken">SDK Token for authentication (sent as api_key in payload). 
+    /// Legacy: If migrating from old code, pass your previous "apiKey" value here.</param>
+    /// <param name="apiKey">API Key for project identification (sent as project_id in payload).
+    /// Legacy: If migrating from old code, pass your previous "projectId" value here.</param>
+    /// <param name="FieldsToMaskPairedWithMaskers">Optional custom masking configuration</param>
+    /// <param name="disableMasking">Whether to disable masking for performance</param>
     public static IServiceCollection AddTreblle(
         this IServiceCollection services,
+        string sdkToken,
         string apiKey,
-        string projectId,
         Dictionary<string, string>? FieldsToMaskPairedWithMaskers = null,
         bool disableMasking = false)
     {
 
-        if (string.IsNullOrWhiteSpace(apiKey))
+        if (string.IsNullOrWhiteSpace(sdkToken))
         {
-            throw new ArgumentException("The api key is required", nameof(apiKey));
+            throw new ArgumentException("The SDK token is required", nameof(sdkToken));
         }
 
-        if (string.IsNullOrWhiteSpace(projectId))
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            throw new ArgumentException("The project key is required", nameof(projectId));
+            throw new ArgumentException("The API key is required", nameof(apiKey));
         }
         
         services.TryAddTransient<TreblleService>( serviceProvider =>
@@ -83,15 +94,23 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<TrebllePayloadFactory>();
         services.Configure<TreblleOptions>(o =>
         {
+            // Set both new and legacy properties for maximum compatibility
+            o.SdkToken = sdkToken;
             o.ApiKey = apiKey;
-            o.ProjectId = projectId;
+            
+            // Also set legacy properties to ensure backward compatibility
+            #pragma warning disable CS0618 // Type or member is obsolete
+            o.LegacyApiKey = sdkToken;  // Same value, legacy property name
+            o.ProjectId = apiKey;       // Same value, legacy property name
+            #pragma warning restore CS0618 // Type or member is obsolete
+            
             o.FieldsToMaskPairedWithMaskers = FieldsToMaskPairedWithMaskers;
             o.DisableMasking = disableMasking;
         });
         services.AddHttpClient("Treblle", httpClient =>
         { 
             httpClient.BaseAddress = DefaultApiUri;
-            httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+            httpClient.DefaultRequestHeaders.Add("x-api-key", sdkToken);
         });
 
         services.TryAddKeyedTransient<IStringMasker, DefaultStringMasker>(nameof(DefaultStringMasker));
@@ -109,4 +128,5 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
 }
