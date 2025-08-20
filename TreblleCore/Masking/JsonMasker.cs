@@ -83,17 +83,11 @@ public static class JsonMasker
         {
             if (ShouldMask(map.Key, currentPath))
             {
-                var masker = serviceProvider.GetKeyedService<IStringMasker>(map.Value);
-                if (masker != null)
-                {
-                    maskedValue = masker.Mask(propertyValue?.ToString() ?? string.Empty);
-                    isValueMasked = true;
-                    break;
-                }
-                else
-                {
-                    logger.LogError($"Could not resolve masker for field {currentPath}");
-                }
+                var maskerFactory = serviceProvider.GetRequiredService<MaskerFactory>();
+                var masker = maskerFactory.GetMasker(map.Value);
+                maskedValue = masker.Mask(propertyValue?.ToString() ?? string.Empty);
+                isValueMasked = true;
+                break;
             }
         }
 

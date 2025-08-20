@@ -413,7 +413,7 @@ internal sealed class TrebllePayloadFactory
 #elif NET7_0
                 return "11";
 #else
-                retrun "10";
+                return "10";
 #endif
     }
 

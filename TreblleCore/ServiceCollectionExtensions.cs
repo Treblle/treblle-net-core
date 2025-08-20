@@ -215,18 +215,16 @@ public static class ServiceCollectionExtensions
             httpClient.DefaultRequestHeaders.Add("x-api-key", sdkToken);
         });
 
-        services.TryAddKeyedTransient<IStringMasker, DefaultStringMasker>(nameof(DefaultStringMasker));
-        services.TryAddKeyedTransient<IStringMasker, EmailMasker>(nameof(EmailMasker));
-        services.TryAddKeyedTransient<IStringMasker, CreditCardMasker>(nameof(CreditCardMasker));
-        services.TryAddKeyedTransient<IStringMasker, SocialSecurityMasker>(nameof(SocialSecurityMasker));
-        services.TryAddKeyedTransient<IStringMasker, DateMasker>(nameof(DateMasker));
-        services.TryAddKeyedTransient<IStringMasker, PostalCodeMasker>(nameof(PostalCodeMasker));
+        // Register masker types individually (replacement for keyed services)
+        services.TryAddTransient<DefaultStringMasker>();
+        services.TryAddTransient<EmailMasker>();
+        services.TryAddTransient<CreditCardMasker>();
+        services.TryAddTransient<SocialSecurityMasker>();
+        services.TryAddTransient<DateMasker>();
+        services.TryAddTransient<PostalCodeMasker>();
 
-        services.TryAddTransient<DefaultStringMasker, EmailMasker>();
-        services.TryAddTransient<DefaultStringMasker, CreditCardMasker>();
-        services.TryAddTransient<DefaultStringMasker, SocialSecurityMasker>();
-        services.TryAddTransient<DefaultStringMasker, DateMasker>();
-        services.TryAddTransient<DefaultStringMasker, PostalCodeMasker>();
+        // Register masker factory for .NET 6+ compatibility
+        services.TryAddSingleton<MaskerFactory>();
 
         return services;
     }

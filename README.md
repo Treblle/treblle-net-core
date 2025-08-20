@@ -1,78 +1,48 @@
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/2c6cafdf-3b1d-4938-8f7a-5feac9c68404"/>
-</div>
-<div align="center">
+# Treblle - API Intelligence Platform
 
-# Treblle
+[![Treblle API Intelligence](https://github.com/user-attachments/assets/b268ae9e-7c8a-4ade-95da-b4ac6fce6eea)](https://treblle.com)
 
-<a href="https://docs.treblle.com/en/integrations" target="_blank">Integrations</a>
-<span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-<a href="http://treblle.com/" target="_blank">Website</a>
-<span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-<a href="https://docs.treblle.com" target="_blank">Docs</a>
-<span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-<a href="https://blog.treblle.com" target="_blank">Blog</a>
-<span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-<a href="https://twitter.com/treblleapi" target="_blank">Twitter</a>
-<span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-<a href="https://treblle.com/chat" target="_blank">Discord</a>
-<br />
+[Website](http://treblle.com/) • [Documentation](https://docs.treblle.com/) • [Pricing](https://treblle.com/pricing)
 
-  <hr />
-</div>
+Treblle is an API intelligence platfom that helps developers, teams and organizations understand their APIs from a single integration point.
 
-API Intelligence Platform. 🚀
+---
 
-Treblle is a lightweight SDK that helps Engineering and Product teams build, ship & maintain REST-based APIs faster.
+## Treblle .NET Core SDK
 
-## Features
+[![Latest Version](https://img.shields.io/nuget/v/Treblle.Net.Core)](https://www.npmjs.com/package/Treblle.Net.Core)
+[![Total Downloads](https://img.shields.io/nuget/dt/Treblle.Net.Core)](https://www.npmjs.com/package/treblle)
 
-<div align="center">
-  <br />
-  <img src="https://github.com/user-attachments/assets/02cbc06a-0c8b-4077-b696-e0e73df8588c"/>
-  <br />
-  <br />
-</div>
+## Requirements
 
-- [API Monitoring & Observability](https://www.treblle.com/features/api-monitoring-observability)
-- [Auto-generated API Docs](https://www.treblle.com/features/auto-generated-api-docs)
-- [API analytics](https://www.treblle.com/features/api-analytics)
-- [Treblle API Score](https://www.treblle.com/features/api-quality-score)
-- [API Lifecycle Collaboration](https://www.treblle.com/features/api-lifecycle)
-- [Native Treblle Apps](https://www.treblle.com/features/native-apps)
+| Requirement | Version |
+|-------------|---------|
+| **.NET** | 6.0+ |
+| **ASP.NET Core** | 6.0+ |
+| **C#** | 10.0+ |
 
+**Supported Platforms:**
+- Windows, macOS, Linux
+- Docker containers
+- Azure, AWS, Google Cloud
+- Any hosting platform supporting .NET 8+
 
-## How Treblle Works
-Once you’ve integrated a Treblle SDK in your codebase, this SDK will send requests and response data to your Treblle Dashboard.
+**Supported API Types:**
+- REST APIs with Controllers
+- Minimal APIs
+- Web APIs
+- Mixed controller/minimal API applications
 
-In your Treblle Dashboard you get to see real-time requests to your API, auto-generated API docs, API analytics like how fast the response was for an endpoint, the load size of the response, etc.
+**Dependencies:**
+- `Microsoft.AspNetCore.App` (framework reference)
+- `System.Text.Json` 6.0+
+- No external dependencies required
 
-Treblle also uses the requests sent to your Dashboard to calculate your API score which is a quality score that’s calculated based on the performance, quality, and security best practices for your API.
-
-> Visit [https://docs.treblle.com](http://docs.treblle.com) for the complete documentation.
-
-## Security
-
-### Masking fields
-Masking fields ensure certain sensitive data are removed before being sent to Treblle.
-
-To make sure masking is done before any data leaves your server [we built it into all our SDKs](https://docs.treblle.com/en/security/masked-fields#fields-masked-by-default).
-
-This means data masking is super fast and happens on a programming level before the API request is sent to Treblle. You can [customize](https://docs.treblle.com/en/security/masked-fields#custom-masked-fields) exactly which fields are masked when you’re integrating the SDK.
-
-> Visit the [Masked fields](https://docs.treblle.com/en/security/masked-fields) section of the [docs](https://docs.sailscasts.com) for the complete documentation.
-
-
-## Get Started
-
-1. Sign in to [Treblle](https://platform.treblle.com).
-2. [Create a Treblle project](https://docs.treblle.com/en/dashboard/projects#creating-a-project).
-3. [Setup the SDK](#install-the-SDK) for your platform.
-
-
-## Quick Start
+## Installation
 
 ### 1. Install the Package
+You can install the Treblle JavaScript .NET Core via [NuGet](https://www.nuget.org/packages/Treblle.Net.Core/). Simply run the following command:
+
 ```bash
 dotnet add package Treblle.Net.Core
 ```
@@ -90,9 +60,14 @@ export TREBLLE_API_KEY=your_api_key
 
 Then use zero-configuration setup:
 ```csharp
-builder.Services.AddTreblle(); // Auto-detects credentials
+builder.Services.AddTreblle();
 app.UseTreblle();
 ```
+
+> **💡 Where to place this code:**
+> - **Program.cs** (new minimal hosting model): Add `builder.Services.AddTreblle()` before `builder.Build()` and `app.UseTreblle()` after `var app = builder.Build()`
+> - **Startup.cs** (legacy): Add `services.AddTreblle()` in `ConfigureServices()` and `app.UseTreblle()` in `Configure()`
+> - **Web API templates**: Place after authentication/authorization middleware but before routing
 
 **Option B: appsettings.json**
 ```json
@@ -105,7 +80,7 @@ app.UseTreblle();
 ```
 
 ```csharp
-builder.Services.AddTreblle(); // Auto-detects from config
+builder.Services.AddTreblle();
 app.UseTreblle();
 ```
 
@@ -117,52 +92,134 @@ app.UseTreblle();
 
 That's it! Treblle will now **automatically track all your API endpoints**. 🎉
 
-## Configuration Options Overview
+## Configuration Options
 
-Treblle v2.0 offers several configuration options:
+Treblle offers several configuration options:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `ExcludedPaths` | `null` | Skip tracking for specific paths (supports wildcards) |
+| `ExcludedPaths` | `null` | Exclude specific paths or endpoints from Treblle |
 | `DebugMode` | `false` | Enable detailed logging for troubleshooting |
-| `DisableMasking` | `false` | Disable data masking for performance (reduces memory by 70%) |
+| `DisableMasking` | `false` | Disable data masking if not needed |
 
 **Example with options:**
 ```csharp
 builder.Services.AddTreblle(options =>
 {
     options.ExcludedPaths = new[] { "/health", "/admin/*", "/swagger/*" };
-    options.DebugMode = true;           // Enable for development
-    options.DisableMasking = false;     // Keep masking enabled for security
+    options.DebugMode = true;
+    options.DisableMasking = false;
 });
 ```
 
-## How It Works
+### Debug Mode
 
-**🚀 Zero Configuration Required**  
-Treblle v2.0 automatically tracks **all your API endpoints** without any manual setup. No more adding `[Treblle]` attributes or calling `.UseTreblle()` on individual routes.
-
-**🎯 Smart Exclusions**  
-Use `ExcludedPaths` to skip tracking for health checks, admin routes, or any endpoints you don't want monitored:
+For troubleshooting and development purposes, you can enable debug mode to get detailed logging about Treblle SDK operations:
 
 ```csharp
+// Option 1: Via AddTreblle parameter
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", null, disableMasking: false, debugMode: true);
+
+// Option 2: Via configuration options
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY");
+builder.Services.Configure<TreblleOptions>(options =>
+{
+    options.DebugMode = true;
+});
+
+// Option 3: With auto-configuration
 builder.Services.AddTreblle(options =>
 {
-    options.ExcludedPaths = new[] 
-    { 
-        "/health",      // Exact match
-        "/admin/*",     // Wildcard: excludes /admin/users, /admin/settings, etc.
-        "/swagger/*"    // Exclude Swagger UI
-    };
+    options.DebugMode = true;
 });
 ```
 
-**🔧 Legacy Support**  
-If you have existing `[Treblle]` attributes, they still work! You can remove them gradually or keep them for explicit control.
+**Debug Information Provided:**
+- SDK Token and API Key validation messages
+- Endpoint processing status (which routes have `[Treblle]` attribute)
+- JSON parsing issues in request/response bodies
+- Payload size limit notifications (>5MB)
+- Network transmission errors
+- Middleware initialization status
 
-> See the [docs](https://docs.treblle.com/en/integrations/net-core) for this SDK to learn more.
+All debug logs are prefixed with "Treblle Debug:" and use `LogDebug` level, making them easy to filter and control via your logging configuration.
 
-### Masking Additional Fields
+**Note:** Debug mode should typically only be enabled in development or staging environments as it increases log verbosity.
+
+### Excluding endpoints or paths
+
+By default, Treblle now automatically tracks **all endpoints** without requiring manual `[Treblle]` attributes. You can exclude specific paths using the `ExcludedPaths` configuration:
+
+**Configuration:**
+```csharp
+// Track all endpoints except specified exclusions
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", options =>
+{
+    options.ExcludedPaths = new[] { "/health", "/metrics", "/admin/*" };
+});
+```
+
+**Advanced Exclusion Patterns:**
+```csharp
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", options =>
+{
+    options.ExcludedPaths = new[] 
+    {
+        "/health",           // Exact match
+        "/metrics",          // Exact match  
+        "/admin/*",          // Wildcard: excludes /admin/users, /admin/settings, etc.
+        "/api/v*/internal",  // Complex wildcard: excludes /api/v1/internal, /api/v2/internal, etc.
+        "/debug/*",          // Wildcard: excludes all debug endpoints
+        "/_*"                // Wildcard: excludes all endpoints starting with underscore
+    };
+    options.DebugMode = true;
+});
+```
+
+**Pattern Matching Features:**
+- **Case-insensitive** matching for all patterns
+- **Exact matches**: `/health` matches only `/health`
+- **Wildcard support**: 
+  - `*` matches any number of characters
+  - `?` matches exactly one character
+- **Performance optimized** with regex compilation and result caching
+- **Memory efficient** with bounded cache sizes
+
+
+**Common Exclusion Examples:**
+```csharp
+options.ExcludedPaths = new[]
+{
+    // Health checks and monitoring
+    "/health", "/healthz", "/ready", "/live",
+    "/metrics", "/prometheus",
+    
+    // Admin and internal APIs
+    "/admin/*", "/internal/*", "/_*",
+    
+    // Static assets (if serving through API)
+    "/assets/*", "/static/*", "/public/*",
+    
+    // Development endpoints
+    "/swagger/*", "/debug/*", "/dev/*"
+};
+```
+
+### Masking Data
+Treblle automatically masks sensitive fields in request and response bodies. The following fields are masked by default:
+
+- `password`
+- `pwd`
+- `secret`
+- `password_confirmation`
+- `passwordConfirmation`
+- `cc`
+- `card_number`
+- `cardNumber`
+- `ccv`
+- `ssn`
+- `credit_score`
+- `creditScore`
 
 If you want to expand the list of fields you want to hide, you can pass a list of property names you want to hide and appropriate maskers to use as a key-value pairs to the `AddTreblle` call:
 
@@ -218,105 +275,6 @@ builder.Services.AddTreblle(options =>
 
 **Performance Impact:** Disabling masking can reduce memory usage by up to 70% for large payloads, as it skips JSON parsing, object tree creation, and field processing operations. This is particularly beneficial for APIs handling large response bodies or high request volumes.
 
-### Debug Mode
-
-For troubleshooting and development purposes, you can enable debug mode to get detailed logging about Treblle SDK operations:
-
-```csharp
-// Option 1: Via AddTreblle parameter
-builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", null, disableMasking: false, debugMode: true);
-
-// Option 2: Via configuration options
-builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY");
-builder.Services.Configure<TreblleOptions>(options =>
-{
-    options.DebugMode = true;
-});
-
-// Option 3: With auto-configuration
-builder.Services.AddTreblle(options =>
-{
-    options.DebugMode = true;
-});
-```
-
-**Debug Information Provided:**
-- SDK Token and API Key validation messages
-- Endpoint processing status (which routes have `[Treblle]` attribute)
-- JSON parsing issues in request/response bodies
-- Payload size limit notifications (>5MB)
-- Network transmission errors
-- Middleware initialization status
-
-All debug logs are prefixed with "Treblle Debug:" and use `LogDebug` level, making them easy to filter and control via your logging configuration.
-
-**Note:** Debug mode should typically only be enabled in development or staging environments as it increases log verbosity.
-
-### Zero-Configuration Auto-Discovery
-
-By default, Treblle now automatically tracks **all endpoints** without requiring manual `[Treblle]` attributes. You can exclude specific paths using the `ExcludedPaths` configuration:
-
-**New Configuration:**
-```csharp
-// Track all endpoints except specified exclusions
-builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", options =>
-{
-    options.ExcludedPaths = new[] { "/health", "/metrics", "/admin/*" };
-});
-```
-
-**Advanced Exclusion Patterns:**
-```csharp
-builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", options =>
-{
-    options.ExcludedPaths = new[] 
-    {
-        "/health",           // Exact match
-        "/metrics",          // Exact match  
-        "/admin/*",          // Wildcard: excludes /admin/users, /admin/settings, etc.
-        "/api/v*/internal",  // Complex wildcard: excludes /api/v1/internal, /api/v2/internal, etc.
-        "/debug/*",          // Wildcard: excludes all debug endpoints
-        "/_*"                // Wildcard: excludes all endpoints starting with underscore
-    };
-    
-    options.DebugMode = true; // See auto-discovery decisions in logs
-});
-```
-
-**Pattern Matching Features:**
-- **Case-insensitive** matching for all patterns
-- **Exact matches**: `/health` matches only `/health`
-- **Wildcard support**: 
-  - `*` matches any number of characters
-  - `?` matches exactly one character
-- **Performance optimized** with regex compilation and result caching
-- **Memory efficient** with bounded cache sizes
-
-**Migration from Manual Attributes:**
-- **No changes required**: Existing `[Treblle]` attributes continue to work
-- **Gradual migration**: You can remove `[Treblle]` attributes as desired
-- **Override capability**: `[Treblle]` attributes take precedence over exclusions (unless explicitly excluded)
-
-
-**Common Exclusion Examples:**
-```csharp
-options.ExcludedPaths = new[]
-{
-    // Health checks and monitoring
-    "/health", "/healthz", "/ready", "/live",
-    "/metrics", "/prometheus",
-    
-    // Admin and internal APIs
-    "/admin/*", "/internal/*", "/_*",
-    
-    // Static assets (if serving through API)
-    "/assets/*", "/static/*", "/public/*",
-    
-    // Development endpoints
-    "/swagger/*", "/debug/*", "/dev/*"
-};
-```
-
 ## Upgrading to v2.0 🚀
 
 Treblle .NET Core v2.0 introduces major improvements with **breaking changes**. This guide will help you migrate from v1.x.
@@ -330,50 +288,8 @@ Treblle .NET Core v2.0 introduces major improvements with **breaking changes**. 
 - ✅ **Performance Optimizations** - Cached pattern matching, memory improvements
 - ✅ **Cleaner API** - Removed legacy/deprecated properties
 
-### 🔄 Breaking Changes
 
-#### 1. **Removed Legacy Properties**
-```csharp
-// ❌ v1.x - These properties no longer exist:
-options.LegacyApiKey     // REMOVED
-options.ProjectId        // REMOVED
-
-// ✅ v2.0 - Use these instead:
-options.SdkToken         // Clear, consistent naming
-options.ApiKey           // Clear, consistent naming
-```
-
-#### 2. **Updated Configuration Keys**
-```json
-// ❌ v1.x appsettings.json
-{
-  "Treblle": {
-    "ApiKey": "your-token",      // Confusing naming
-    "ProjectId": "your-project"  // Confusing naming
-  }
-}
-
-// ✅ v2.0 appsettings.json
-{
-  "Treblle": {
-    "SdkToken": "your-token",    // Clear: authentication token
-    "ApiKey": "your-project"     // Clear: project identifier
-  }
-}
-```
-
-#### 3. **Environment Variable Changes**
-```bash
-# ❌ v1.x environment variables - No longer supported
-TREBLLE_API_KEY_LEGACY=your-token
-TREBLLE_PROJECT_ID=your-project
-
-# ✅ v2.0 environment variables
-TREBLLE_SDK_TOKEN=your-token      # Clear: authentication token
-TREBLLE_API_KEY=your-project      # Clear: project identifier
-```
-
-### 📋 Step-by-Step Migration Guide
+### 📋 Migration Guide
 
 #### **Step 1: Update Package Reference**
 ```xml
@@ -471,133 +387,21 @@ builder.Services.AddTreblle(options =>
 });
 ```
 
-### 🎯 Quick Migration Checklist
+## Getting Help
 
-- [ ] Update to v2.0.0-beta.1 package
-- [ ] Choose configuration approach (auto-config recommended)
-- [ ] Update environment variables or appsettings.json
-- [ ] Remove legacy configuration keys
-- [ ] Test with debug mode enabled
-- [ ] Optionally remove `[Treblle]` attributes (auto-discovery handles this)
-- [ ] Verify excluded paths work as expected
+If you continue to experience issues:
 
-### 🔧 Troubleshooting Common Issues
+1. Enable `debug: true` and check console output
+2. Verify your SDK token and API key are correct in Treblle dashboard
+3. Test with a simple endpoint first
+4. Check [Treblle documentation](https://docs.treblle.com) for the latest updates
+5. Contact support at <https://treblle.com> or email support@treblle.com
 
-**"Treblle SDK Token not found" Error:**
-```csharp
-// Ensure you've set one of these:
-// Environment: TREBLLE_SDK_TOKEN
-// Config: Treblle:SdkToken in appsettings.json
-// Or use manual: AddTreblle("token", "key")
-```
+## Support
 
-**Too Many Endpoints Being Tracked:**
-```csharp
-builder.Services.AddTreblle(options =>
-{
-    options.ExcludedPaths = new[] 
-    {
-        "/health", "/healthz",
-        "/swagger/*", 
-        "/admin/*",
-        "/_*" // Exclude all underscore routes
-    };
-});
-```
+If you have problems of any kind feel free to reach out via <https://treblle.com> or email support@treblle.com and we'll do our best to help you out.
 
-**Performance Concerns:**
-```csharp
-builder.Services.AddTreblle(options =>
-{
-    options.DisableMasking = true; // 70% memory reduction
-    options.ExcludedPaths = new[] { "/high-volume/*" };
-});
-```
+## License
 
-### 💡 Pro Tips for v2.0
-
-1. **Start with auto-configuration** - it's the simplest approach
-2. **Use environment variables in production** - more secure than config files  
-3. **Enable debug mode during migration** - see exactly what's happening
-4. **Exclude noisy endpoints** - `/health`, `/metrics`, etc.
-5. **Remove old `[Treblle]` attributes gradually** - they still work but aren't needed
-
-### 📞 Need Help?
-
-- 🐛 **Issues**: [GitHub Issues](https://github.com/Treblle/treblle-net-core/issues)
-- 💬 **Community**: [Discord](https://treblle.com/chat)  
-- 📖 **Docs**: [docs.treblle.com](https://docs.treblle.com)
-
----
-
-### Running Treblle only in production
-
-If you want to run Treblle only in production, you can rely on the environment variables, or use a similar approach via your application config.
-
-```csharp
-if (app.Environment.IsProduction())
-{
-    app.UseTreblle();
-}
-```
-
-## Available SDKs
-
-Treblle provides [open-source SDKs](https://docs.treblle.com/en/integrations) that let you seamlessly integrate Treblle with your REST-based APIs.
-
-- [`treblle-laravel`](https://github.com/Treblle/treblle-laravel): SDK for Laravel
-- [`treblle-php`](https://github.com/Treblle/treblle-php): SDK for PHP
-- [`treblle-symfony`](https://github.com/Treblle/treblle-symfony): SDK for Symfony
-- [`treblle-lumen`](https://github.com/Treblle/treblle-lumen): SDK for Lumen
-- [`treblle-sails`](https://github.com/Treblle/treblle-sails): SDK for Sails
-- [`treblle-adonisjs`](https://github.com/Treblle/treblle-adonisjs): SDK for AdonisJS
-- [`treblle-fastify`](https://github.com/Treblle/treblle-fastify): SDK for Fastify
-- [`treblle-directus`](https://github.com/Treblle/treblle-directus): SDK for Directus
-- [`treblle-strapi`](https://github.com/Treblle/treblle-strapi): SDK for Strapi
-- [`treblle-express`](https://github.com/Treblle/treblle-express): SDK for Express
-- [`treblle-koa`](https://github.com/Treblle/treblle-koa): SDK for Koa
-- [`treblle-go`](https://github.com/Treblle/treblle-go): SDK for Go
-- [`treblle-ruby`](https://github.com/Treblle/treblle-ruby): SDK for Ruby on Rails
-- [`treblle-python`](https://github.com/Treblle/treblle-python): SDK for Python/Django
-
-> See the [docs](https://docs.treblle.com/en/integrations) for more on SDKs and Integrations.
-
-## Other Packages
-
-Besides the SDKs, we also provide helpers and configuration used for SDK
-development. If you're thinking about contributing to or creating a SDK, have a look at the resources
-below:
-
-- [`treblle-utils`](https://github.com/Treblle/treblle-utils):  A set of helpers and
-  utility functions useful for the JavaScript SDKs.
-- [`php-utils`](https://github.com/Treblle/php-utils):   A set of helpers and
-  utility functions useful for the PHP SDKs.
-
-## Community 💙
-
-First and foremost: **Star and watch this repository** to stay up-to-date.
-
-Also, follow our [Blog](https://blog.treblle.com), and on [Twitter](https://twitter.com/treblleapi).
-
-You can chat with the team and other members on [Discord](https://treblle.com/chat) and follow our tutorials and other video material at [YouTube](https://youtube.com/@treblle).
-
-[![Treblle Discord](https://img.shields.io/badge/Treblle%20Discord-Join%20our%20Discord-F3F5FC?labelColor=7289DA&style=for-the-badge&logo=discord&logoColor=F3F5FC&link=https://treblle.com/chat)](https://treblle.com/chat)
-
-[![Treblle YouTube](https://img.shields.io/badge/Treblle%20YouTube-Subscribe%20on%20YouTube-F3F5FC?labelColor=c4302b&style=for-the-badge&logo=YouTube&logoColor=F3F5FC&link=https://youtube.com/@treblle)](https://youtube.com/@treblle)
-
-[![Treblle on Twitter](https://img.shields.io/badge/Treblle%20on%20Twitter-Follow%20Us-F3F5FC?labelColor=1DA1F2&style=for-the-badge&logo=Twitter&logoColor=F3F5FC&link=https://twitter.com/treblleapi)](https://twitter.com/treblleapi)
-
-### How to contribute
-
-Here are some ways of contributing to making Treblle better:
-
-- **[Try out Treblle](https://docs.treblle.com/en/introduction#getting-started)**, and let us know ways to make Treblle better for you. Let us know here on [Discord](https://treblle.com/chat).
-- Join our [Discord](https://treblle.com/chat) and connect with other members to share and learn from.
-- Send a pull request to any of our [open source repositories](https://github.com/Treblle) on Github. Check the contribution guide on the repo you want to contribute to for more details about how to contribute. We're looking forward to your contribution!
-
-### Contributors
-<a href="https://github.com/Treblle/treblle-net-core/graphs/contributors">
-  <p align="center">
-    <img  src="https://contrib.rocks/image?repo=Treblle/treblle-net-core" alt="A table of avatars from the project's contributors" />
-  </p>
-</a>
+Copyright 2025, Treblle Inc. Licensed under the MIT license:
+http://www.opensource.org/licenses/mit-license.php
