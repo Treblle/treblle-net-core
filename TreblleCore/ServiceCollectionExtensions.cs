@@ -81,16 +81,7 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection</param>
     public static IServiceCollection AddTreblle(this IServiceCollection services)
     {
-        // Use the configuration-based overload for auto-configuration
-        services.AddOptions<TreblleOptions>()
-            .Configure<IConfiguration>((options, configuration) =>
-            {
-                var (sdkToken, apiKey) = GetTreblleCredentials(configuration);
-                options.SdkToken = sdkToken;
-                options.ApiKey = apiKey;
-            });
-
-        return AddTreblle(services, string.Empty, string.Empty, null, false, false, null);
+        return AddTreblleWithAutoConfiguration(services, null);
     }
 
     /// <summary>
@@ -103,6 +94,16 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<TreblleOptions> configureOptions)
     {
+        return AddTreblleWithAutoConfiguration(services, configureOptions);
+    }
+
+    /// <summary>
+    /// Internal method for auto-configuration that bypasses credential validation
+    /// </summary>
+    private static IServiceCollection AddTreblleWithAutoConfiguration(
+        IServiceCollection services,
+        Action<TreblleOptions>? configureOptions)
+    {
         // Configure auto-detection first, then user overrides
         services.AddOptions<TreblleOptions>()
             .Configure<IConfiguration>((options, configuration) =>
@@ -110,10 +111,64 @@ public static class ServiceCollectionExtensions
                 var (sdkToken, apiKey) = GetTreblleCredentials(configuration);
                 options.SdkToken = sdkToken;
                 options.ApiKey = apiKey;
-            })
-            .PostConfigure(configureOptions);
+            });
 
-        return AddTreblle(services, string.Empty, string.Empty, null, false, false, null);
+        if (configureOptions != null)
+        {
+            services.PostConfigure<TreblleOptions>(configureOptions);
+        }
+
+        // Register services without credential validation since they're handled by options
+        services.TryAddTransient<TreblleService>(serviceProvider =>
+        {
+            var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+            var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
+            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
+
+            if (options.DebugMode)
+            {
+                logger.LogDebug("[TREBLLE]: TreblleService initialized with debug mode enabled");
+            }
+
+            if (options.DisableMasking)
+            {
+                if (options.DebugMode)
+                {
+                    logger.LogDebug("[TREBLLE]: Data masking is disabled for improved performance");
+                }
+            }
+            else
+            {
+                if (options.DebugMode)
+                {
+                    logger.LogDebug("[TREBLLE]: Using default sensitive words for masking");
+                }
+            }
+
+            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode);
+        });
+
+        services.TryAddSingleton<TrebllePayloadFactory>();
+
+        services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
+            httpClient.BaseAddress = DefaultApiUri;
+            httpClient.DefaultRequestHeaders.Add("x-api-key", options.SdkToken);
+        });
+
+        // Register masker types individually (replacement for keyed services)
+        services.TryAddTransient<DefaultStringMasker>();
+        services.TryAddTransient<EmailMasker>();
+        services.TryAddTransient<CreditCardMasker>();
+        services.TryAddTransient<SocialSecurityMasker>();
+        services.TryAddTransient<DateMasker>();
+        services.TryAddTransient<PostalCodeMasker>();
+
+        // Register masker factory for .NET 6+ compatibility
+        services.TryAddSingleton<MaskerFactory>();
+
+        return services;
     }
 
     /// <summary>
@@ -136,7 +191,7 @@ public static class ServiceCollectionExtensions
         {
             if (debugMode)
             {
-                setupLogger.LogDebug("Treblle Debug: SDK Token is null or empty - this will cause authentication failures");
+                setupLogger.LogDebug("[TREBLLE]: SDK Token is null or empty - this will cause authentication failures");
             }
             throw new ArgumentException("The SDK token is required", nameof(sdkToken));
         }
@@ -145,15 +200,15 @@ public static class ServiceCollectionExtensions
         {
             if (debugMode)
             {
-                setupLogger.LogDebug("Treblle Debug: API Key is null or empty - this will cause project identification failures");
+                setupLogger.LogDebug("[TREBLLE]: API Key is null or empty - this will cause project identification failures");
             }
             throw new ArgumentException("The API key is required", nameof(apiKey));
         }
 
         if (debugMode)
         {
-            setupLogger.LogDebug("Treblle Debug: SDK Token and API Key provided successfully");
-            setupLogger.LogDebug("Treblle Debug: Debug mode is enabled - additional logging will be available");
+            setupLogger.LogDebug("[TREBLLE]: SDK Token and API Key provided successfully");
+            setupLogger.LogDebug("[TREBLLE]: Debug mode is enabled - additional logging will be available");
         }
         
         services.TryAddTransient<TreblleService>( serviceProvider =>
@@ -164,21 +219,21 @@ public static class ServiceCollectionExtensions
 
             if (options.DebugMode)
             {
-                logger.LogDebug("Treblle Debug: TreblleService initialized with debug mode enabled");
+                logger.LogDebug("[TREBLLE]: TreblleService initialized with debug mode enabled");
             }
 
             if (options.DisableMasking)
             {
                 if (options.DebugMode)
                 {
-                    logger.LogDebug("Treblle Debug: Data masking is disabled for improved performance");
+                    logger.LogDebug("[TREBLLE]: Data masking is disabled for improved performance");
                 }
             }
             else if (FieldsToMaskPairedWithMaskers is null)
             {
                 if (options.DebugMode)
                 {
-                    logger.LogDebug("Treblle Debug: Using default sensitive words for masking");
+                    logger.LogDebug("[TREBLLE]: Using default sensitive words for masking");
                 }
             }
             else 
@@ -190,7 +245,7 @@ public static class ServiceCollectionExtensions
                 
                 if (options.DebugMode)
                 {
-                    logger.LogDebug("Treblle Debug: Using custom masking configuration with {Count} custom rules", FieldsToMaskPairedWithMaskers.Count);
+                    logger.LogDebug("[TREBLLE]: Using custom masking configuration with {Count} custom rules", FieldsToMaskPairedWithMaskers.Count);
                 }
             }
 

@@ -57,7 +57,7 @@ internal sealed class TreblleService
             {
                 if (_debugMode)
                 {
-                    _logger.LogDebug("Treblle Debug: Request payload size exceeds 5MB limit, replacing with size notification");
+                    _logger.LogDebug("[TREBLLE]: Request payload size exceeds 5MB limit, replacing with size notification");
                 }
                 
                 // Create a new payload with the large request body replaced

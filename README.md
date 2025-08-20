@@ -60,7 +60,16 @@ export TREBLLE_API_KEY=your_api_key
 
 Then use zero-configuration setup:
 ```csharp
+// Import the Treblle SDK
+using Treblle.Net.Core;
+
+// Register Treblle Services
 builder.Services.AddTreblle();
+
+// Build your application
+var app = builder.Build();
+
+// Enable the Treblle Middleware
 app.UseTreblle();
 ```
 
@@ -68,6 +77,43 @@ app.UseTreblle();
 > - **Program.cs** (new minimal hosting model): Add `builder.Services.AddTreblle()` before `builder.Build()` and `app.UseTreblle()` after `var app = builder.Build()`
 > - **Startup.cs** (legacy): Add `services.AddTreblle()` in `ConfigureServices()` and `app.UseTreblle()` in `Configure()`
 > - **Web API templates**: Place after authentication/authorization middleware but before routing
+
+**Using .env Files with DotNetEnv**
+
+For development environments, you can use `.env` files with the DotNetEnv package:
+
+```bash
+dotnet add package DotNetEnv
+```
+
+Create a `.env` file in your project root:
+```
+TREBLLE_SDK_TOKEN=your_sdk_token
+TREBLLE_API_KEY=your_api_key
+```
+
+Then load the environment variables in your `Program.cs`:
+```csharp
+// Import the Treblle SDK
+using Treblle.Net.Core;
+
+// Import the ENV Plugin
+using DotNetEnv;
+
+// Load environment variables from .env file
+Env.Load();
+
+// Register Treblle Services
+builder.Services.AddTreblle();
+
+// Build your application
+var app = builder.Build();
+
+// Enable the Treblle Middleware
+app.UseTreblle();
+```
+
+> **💡 Note:** The `DotNetEnv` package is only needed if you want to load variables from `.env` files. Standard environment variables work without any additional packages.
 
 **Option B: appsettings.json**
 ```json
@@ -142,7 +188,20 @@ builder.Services.AddTreblle(options =>
 - Network transmission errors
 - Middleware initialization status
 
-All debug logs are prefixed with "Treblle Debug:" and use `LogDebug` level, making them easy to filter and control via your logging configuration.
+All debug logs are prefixed with "[TREBLLE]:" and use `LogDebug` level, making them easy to filter and control via your logging configuration.
+
+**Important:** To see debug messages in the console, ensure your logging configuration allows Debug level messages for Treblle components. Add this to your `appsettings.json`:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Treblle.Net.Core": "Debug"
+    }
+  }
+}
+```
 
 **Note:** Debug mode should typically only be enabled in development or staging environments as it increases log verbosity.
 
@@ -385,6 +444,38 @@ builder.Services.AddTreblle(options =>
 {
     options.DebugMode = true; // See what's being tracked
 });
+```
+
+## Disabling Default .NET HTTP logging
+
+You may notice HTTP client logging messages like:
+
+```
+info: System.Net.Http.HttpClient.Treblle.LogicalHandler[100]
+      Start processing HTTP request POST https://rocknrolla.treblle.com/
+info: System.Net.Http.HttpClient.Treblle.ClientHandler[101]
+      Received HTTP response headers after 328ms - 200
+```
+
+These are normal operational messages showing Treblle successfully sending data to the API. They appear because .NET automatically logs HTTP requests at `Information` level.
+
+To reduce these messages, configure logging in `appsettings.json`:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "System.Net.Http.HttpClient.Treblle": "Warning"
+    }
+  }
+}
+```
+
+Or in `Program.cs`:
+
+```csharp
+builder.Logging.AddFilter("System.Net.Http.HttpClient.Treblle", LogLevel.Warning);
 ```
 
 ## Getting Help
