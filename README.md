@@ -353,7 +353,7 @@ Treblle .NET Core v2.0 introduces major improvements with **breaking changes**. 
 #### **Step 1: Update Package Reference**
 ```xml
 <!-- Update your .csproj -->
-<PackageReference Include="Treblle.Net.Core" Version="2.0.0-beta.1" />
+<PackageReference Include="Treblle.Net.Core" Version="2.0.0" />
 ```
 
 #### **Step 2: Choose Your Migration Path**
