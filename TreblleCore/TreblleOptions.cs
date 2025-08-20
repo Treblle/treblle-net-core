@@ -14,42 +14,6 @@ public sealed class TreblleOptions
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
-    /// <summary>
-    /// [Deprecated] Use SdkToken instead. This property is kept for backward compatibility.
-    /// When set, it will automatically populate SdkToken if SdkToken is empty.
-    /// </summary>
-    [System.Obsolete("Use SdkToken instead. This property will be removed in a future version.")]
-    public string LegacyApiKey 
-    { 
-        get => _legacyApiKey;
-        set 
-        {
-            _legacyApiKey = value;
-            // Auto-populate SdkToken if it's empty (for backward compatibility)
-            if (string.IsNullOrEmpty(SdkToken) && !string.IsNullOrEmpty(value))
-                SdkToken = value;
-        }
-    }
-    private string _legacyApiKey = string.Empty;
-
-    /// <summary>
-    /// [Deprecated] Use ApiKey instead. This property is kept for backward compatibility.
-    /// When set, it will automatically populate ApiKey if ApiKey is empty.
-    /// </summary>
-    [System.Obsolete("Use ApiKey instead. This property will be removed in a future version.")]
-    public string ProjectId 
-    { 
-        get => _projectId;
-        set 
-        {
-            _projectId = value;
-            // Auto-populate ApiKey if it's empty (for backward compatibility)
-            if (string.IsNullOrEmpty(ApiKey) && !string.IsNullOrEmpty(value))
-                ApiKey = value;
-        }
-    }
-    private string _projectId = string.Empty;
-
     public Dictionary<string, string>? FieldsToMaskPairedWithMaskers { get; set; }
     
     /// <summary>
@@ -57,4 +21,18 @@ public sealed class TreblleOptions
     /// and reduces memory usage for high-volume scenarios where masking is not needed.
     /// </summary>
     public bool DisableMasking { get; set; } = false;
+    
+    /// <summary>
+    /// When true, enables debug logging for troubleshooting purposes.
+    /// This includes validation errors, middleware status, and other diagnostic information.
+    /// </summary>
+    public bool DebugMode { get; set; } = false;
+    
+    /// <summary>
+    /// Array of path patterns to exclude from Treblle tracking.
+    /// Supports wildcards: "/admin/*", "/health", "/metrics/*", etc.
+    /// When null or empty, all endpoints are tracked by default.
+    /// Case-insensitive matching is used.
+    /// </summary>
+    public string[]? ExcludedPaths { get; set; } = null;
 }

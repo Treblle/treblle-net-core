@@ -69,59 +69,96 @@ This means data masking is super fast and happens on a programming level before 
 2. [Create a Treblle project](https://docs.treblle.com/en/dashboard/projects#creating-a-project).
 3. [Setup the SDK](#install-the-SDK) for your platform.
 
-### Install the SDK
 
-You can install Treblle .NET Core via NuGet Package Manager or by running the following command:
+## Quick Start
 
+### 1. Install the Package
 ```bash
 dotnet add package Treblle.Net.Core
 ```
 
-### Configuring Treblle
+### 2. Get Your Credentials
+Get your SDK Token and API Key from the [Treblle Dashboard](https://platform.treblle.com).
 
-You will need to add the required service by calling `AddTreblle` and providing your [SDK Token](https://docs.treblle.com/en/dashboard#accessing-your-api-key) and [API Key](https://docs.treblle.com/en/dashboard/projects#project-id).
+### 3. Configure Treblle
 
-Here's an example of configuring the Treblle services and fetching the configuration values from the application settings:
-
-**New Configuration (v1.3.4+):**
-```csharp
-builder.Services.AddTreblle(
-    builder.Configuration["Treblle:SdkToken"],  // SDK Token for authentication
-    builder.Configuration["Treblle:ApiKey"]);   // API Key for project identification
+**Option A: Environment Variables (Recommended for Production)**
+```bash
+export TREBLLE_SDK_TOKEN=your_sdk_token
+export TREBLLE_API_KEY=your_api_key
 ```
 
-**Legacy Configuration (still supported but deprecated):**
+Then use zero-configuration setup:
 ```csharp
-builder.Services.AddTreblle(
-    builder.Configuration["Treblle:ApiKey"],    // Legacy: maps to SDK Token
-    builder.Configuration["Treblle:ProjectId"]); // Legacy: maps to API Key
+builder.Services.AddTreblle(); // Auto-detects credentials
+app.UseTreblle();
 ```
 
-Next you'll need to add the `TreblleMiddleware` by calling `UseTreblle` on the `WebApplication` instance.
-You can optionally configure the use of the exception handler middleware.
-
-```csharp
-app.UseTreblle(useExceptionHandler: true);
+**Option B: appsettings.json**
+```json
+{
+  "Treblle": {
+    "SdkToken": "your_sdk_token",
+    "ApiKey": "your_api_key"
+  }
+}
 ```
 
-**Using Treblle with Controllers**
-
-Now you can specify which endpoints you want Treblle to track by adding this simple attribute to any API controller or method:
-
 ```csharp
-[Treblle]
+builder.Services.AddTreblle(); // Auto-detects from config
+app.UseTreblle();
 ```
 
-**Using Treblle with Minimal APIs**
-
-To tell Treblle to track your Minimal API endpoints, you have to apply `UseTreblle` to your endpoint definition:
-
+**Option C: Manual Configuration**
 ```csharp
-app.MapGet("/", () => "Treblle is awesome")
-    .UseTreblle();
+builder.Services.AddTreblle("your_sdk_token", "your_api_key");
+app.UseTreblle();
 ```
 
-That's it. Your API requests and responses are now being sent to your Treblle project.
+That's it! Treblle will now **automatically track all your API endpoints**. 🎉
+
+## Configuration Options Overview
+
+Treblle v2.0 offers several configuration options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `ExcludedPaths` | `null` | Skip tracking for specific paths (supports wildcards) |
+| `DebugMode` | `false` | Enable detailed logging for troubleshooting |
+| `DisableMasking` | `false` | Disable data masking for performance (reduces memory by 70%) |
+
+**Example with options:**
+```csharp
+builder.Services.AddTreblle(options =>
+{
+    options.ExcludedPaths = new[] { "/health", "/admin/*", "/swagger/*" };
+    options.DebugMode = true;           // Enable for development
+    options.DisableMasking = false;     // Keep masking enabled for security
+});
+```
+
+## How It Works
+
+**🚀 Zero Configuration Required**  
+Treblle v2.0 automatically tracks **all your API endpoints** without any manual setup. No more adding `[Treblle]` attributes or calling `.UseTreblle()` on individual routes.
+
+**🎯 Smart Exclusions**  
+Use `ExcludedPaths` to skip tracking for health checks, admin routes, or any endpoints you don't want monitored:
+
+```csharp
+builder.Services.AddTreblle(options =>
+{
+    options.ExcludedPaths = new[] 
+    { 
+        "/health",      // Exact match
+        "/admin/*",     // Wildcard: excludes /admin/users, /admin/settings, etc.
+        "/swagger/*"    // Exclude Swagger UI
+    };
+});
+```
+
+**🔧 Legacy Support**  
+If you have existing `[Treblle]` attributes, they still work! You can remove them gradually or keep them for explicit control.
 
 > See the [docs](https://docs.treblle.com/en/integrations/net-core) for this SDK to learn more.
 
@@ -129,20 +166,10 @@ That's it. Your API requests and responses are now being sent to your Treblle pr
 
 If you want to expand the list of fields you want to hide, you can pass a list of property names you want to hide and appropriate maskers to use as a key-value pairs to the `AddTreblle` call:
 
-**New Configuration:**
 ```csharp
 builder.Services.AddTreblle(
     builder.Configuration["Treblle:SdkToken"],
     builder.Configuration["Treblle:ApiKey"],
-    new Dictionary<string, string>( { { "customercreditCard", "CreditCardMasker" }, { "firstName", "DefaultStringMasker" } });
-);
-```
-
-**Legacy Configuration:**
-```csharp
-builder.Services.AddTreblle(
-    builder.Configuration["Treblle:ApiKey"],
-    builder.Configuration["Treblle:ProjectId"],
     new Dictionary<string, string>( { { "customercreditCard", "CreditCardMasker" }, { "firstName", "DefaultStringMasker" } });
 );
 ```
@@ -171,7 +198,6 @@ By extending DefaultStringMasker class and implementing IStringMasker interface 
 
 For high-volume scenarios where data masking is not required, you can disable it entirely to significantly improve performance and reduce memory usage:
 
-**New Configuration:**
 ```csharp
 // Option 1: Via AddTreblle parameter
 builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", null, disableMasking: true);
@@ -182,16 +208,9 @@ builder.Services.Configure<TreblleOptions>(options =>
 {
     options.DisableMasking = true;
 });
-```
 
-**Legacy Configuration:**
-```csharp
-// Option 1: Via AddTreblle parameter (deprecated)
-builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID", null, disableMasking: true);
-
-// Option 2: Via configuration options (deprecated)
-builder.Services.AddTreblle("YOUR_API_KEY", "YOUR_PROJECT_ID");
-builder.Services.Configure<TreblleOptions>(options =>
+// Option 3: With auto-configuration
+builder.Services.AddTreblle(options =>
 {
     options.DisableMasking = true;
 });
@@ -199,46 +218,315 @@ builder.Services.Configure<TreblleOptions>(options =>
 
 **Performance Impact:** Disabling masking can reduce memory usage by up to 70% for large payloads, as it skips JSON parsing, object tree creation, and field processing operations. This is particularly beneficial for APIs handling large response bodies or high request volumes.
 
-## Upgrading to v1.3.4+
+### Debug Mode
 
-Starting with version 1.3.4, we've updated the parameter naming conventions to better reflect their purpose:
+For troubleshooting and development purposes, you can enable debug mode to get detailed logging about Treblle SDK operations:
 
-### Breaking Changes
-- **Parameter names changed**: `AddTreblle(apiKey, projectId)` → `AddTreblle(sdkToken, apiKey)`
-- **Payload mapping**: 
-  - `sdkToken` parameter → sent as `api_key` in payload
-  - `apiKey` parameter → sent as `project_id` in payload
-
-### Migration Guide
-
-**Before (v1.3.3 and earlier):**
 ```csharp
-builder.Services.AddTreblle("your-api-key", "your-project-id");
+// Option 1: Via AddTreblle parameter
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", null, disableMasking: false, debugMode: true);
+
+// Option 2: Via configuration options
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY");
+builder.Services.Configure<TreblleOptions>(options =>
+{
+    options.DebugMode = true;
+});
+
+// Option 3: With auto-configuration
+builder.Services.AddTreblle(options =>
+{
+    options.DebugMode = true;
+});
 ```
 
-**After (v1.3.4+):**
+**Debug Information Provided:**
+- SDK Token and API Key validation messages
+- Endpoint processing status (which routes have `[Treblle]` attribute)
+- JSON parsing issues in request/response bodies
+- Payload size limit notifications (>5MB)
+- Network transmission errors
+- Middleware initialization status
+
+All debug logs are prefixed with "Treblle Debug:" and use `LogDebug` level, making them easy to filter and control via your logging configuration.
+
+**Note:** Debug mode should typically only be enabled in development or staging environments as it increases log verbosity.
+
+### Zero-Configuration Auto-Discovery
+
+By default, Treblle now automatically tracks **all endpoints** without requiring manual `[Treblle]` attributes. You can exclude specific paths using the `ExcludedPaths` configuration:
+
+**New Configuration:**
 ```csharp
-builder.Services.AddTreblle("your-api-key", "your-project-id"); // Same values, new meaning
+// Track all endpoints except specified exclusions
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", options =>
+{
+    options.ExcludedPaths = new[] { "/health", "/metrics", "/admin/*" };
+});
 ```
 
-### Important Notes
-- **No code changes required**: The same method signature still works due to backward compatibility
-- **Values stay the same**: Use the same credential values you've always used
-- **Payload format unchanged**: The data sent to Treblle remains exactly the same
-- **Deprecation warnings**: You may see obsolete warnings encouraging you to use the new naming convention
-
-### New Recommended Usage
-For new implementations, we recommend using the new naming convention for clarity:
-
+**Advanced Exclusion Patterns:**
 ```csharp
-// Configuration keys that clearly indicate their purpose
+builder.Services.AddTreblle("YOUR_SDK_TOKEN", "YOUR_API_KEY", options =>
+{
+    options.ExcludedPaths = new[] 
+    {
+        "/health",           // Exact match
+        "/metrics",          // Exact match  
+        "/admin/*",          // Wildcard: excludes /admin/users, /admin/settings, etc.
+        "/api/v*/internal",  // Complex wildcard: excludes /api/v1/internal, /api/v2/internal, etc.
+        "/debug/*",          // Wildcard: excludes all debug endpoints
+        "/_*"                // Wildcard: excludes all endpoints starting with underscore
+    };
+    
+    options.DebugMode = true; // See auto-discovery decisions in logs
+});
+```
+
+**Pattern Matching Features:**
+- **Case-insensitive** matching for all patterns
+- **Exact matches**: `/health` matches only `/health`
+- **Wildcard support**: 
+  - `*` matches any number of characters
+  - `?` matches exactly one character
+- **Performance optimized** with regex compilation and result caching
+- **Memory efficient** with bounded cache sizes
+
+**Migration from Manual Attributes:**
+- **No changes required**: Existing `[Treblle]` attributes continue to work
+- **Gradual migration**: You can remove `[Treblle]` attributes as desired
+- **Override capability**: `[Treblle]` attributes take precedence over exclusions (unless explicitly excluded)
+
+
+**Common Exclusion Examples:**
+```csharp
+options.ExcludedPaths = new[]
+{
+    // Health checks and monitoring
+    "/health", "/healthz", "/ready", "/live",
+    "/metrics", "/prometheus",
+    
+    // Admin and internal APIs
+    "/admin/*", "/internal/*", "/_*",
+    
+    // Static assets (if serving through API)
+    "/assets/*", "/static/*", "/public/*",
+    
+    // Development endpoints
+    "/swagger/*", "/debug/*", "/dev/*"
+};
+```
+
+## Upgrading to v2.0 🚀
+
+Treblle .NET Core v2.0 introduces major improvements with **breaking changes**. This guide will help you migrate from v1.x.
+
+### 🔥 Major New Features
+
+- ✅ **Zero-Configuration Auto-Discovery** - No more manual `[Treblle]` attributes required
+- ✅ **Auto-Configuration** - Automatic credential detection from environment/config
+- ✅ **Smart Path Exclusions** - Wildcard patterns like `/admin/*`, `/api/v*/internal`
+- ✅ **Enhanced Debug Mode** - Comprehensive logging for troubleshooting
+- ✅ **Performance Optimizations** - Cached pattern matching, memory improvements
+- ✅ **Cleaner API** - Removed legacy/deprecated properties
+
+### 🔄 Breaking Changes
+
+#### 1. **Removed Legacy Properties**
+```csharp
+// ❌ v1.x - These properties no longer exist:
+options.LegacyApiKey     // REMOVED
+options.ProjectId        // REMOVED
+
+// ✅ v2.0 - Use these instead:
+options.SdkToken         // Clear, consistent naming
+options.ApiKey           // Clear, consistent naming
+```
+
+#### 2. **Updated Configuration Keys**
+```json
+// ❌ v1.x appsettings.json
+{
+  "Treblle": {
+    "ApiKey": "your-token",      // Confusing naming
+    "ProjectId": "your-project"  // Confusing naming
+  }
+}
+
+// ✅ v2.0 appsettings.json
+{
+  "Treblle": {
+    "SdkToken": "your-token",    // Clear: authentication token
+    "ApiKey": "your-project"     // Clear: project identifier
+  }
+}
+```
+
+#### 3. **Environment Variable Changes**
+```bash
+# ❌ v1.x environment variables - No longer supported
+TREBLLE_API_KEY_LEGACY=your-token
+TREBLLE_PROJECT_ID=your-project
+
+# ✅ v2.0 environment variables
+TREBLLE_SDK_TOKEN=your-token      # Clear: authentication token
+TREBLLE_API_KEY=your-project      # Clear: project identifier
+```
+
+### 📋 Step-by-Step Migration Guide
+
+#### **Step 1: Update Package Reference**
+```xml
+<!-- Update your .csproj -->
+<PackageReference Include="Treblle.Net.Core" Version="2.0.0-beta.1" />
+```
+
+#### **Step 2: Choose Your Migration Path**
+
+**Option A: Zero-Configuration (Recommended)**
+```csharp
+// ❌ v1.x - Manual configuration
 builder.Services.AddTreblle(
-    builder.Configuration["Treblle:SdkToken"],  // Your SDK authentication token
-    builder.Configuration["Treblle:ApiKey"]);   // Your API project identifier
+    builder.Configuration["Treblle:ApiKey"], 
+    builder.Configuration["Treblle:ProjectId"]);
+
+// ✅ v2.0 - Auto-configuration
+builder.Services.AddTreblle(); // That's it! Auto-detects from env/config
 ```
 
-### Backward Compatibility
-The legacy method signature is fully supported and will continue to work. The deprecation warnings are informational only and won't affect functionality.
+**Option B: Manual Configuration**
+```csharp
+// ❌ v1.x
+builder.Services.AddTreblle("old-api-key", "old-project-id");
+
+// ✅ v2.0 - Same values, clearer parameter names
+builder.Services.AddTreblle("your-sdk-token", "your-api-key");
+```
+
+**Option C: Advanced Configuration**
+```csharp
+// ✅ v2.0 - New powerful configuration options
+builder.Services.AddTreblle(options =>
+{
+    options.ExcludedPaths = new[] { "/health", "/admin/*" };
+    options.DebugMode = true;
+});
+```
+
+#### **Step 3: Update Configuration Sources**
+
+Choose one of these approaches:
+
+**Environment Variables (Production Recommended):**
+```bash
+export TREBLLE_SDK_TOKEN=your_sdk_token
+export TREBLLE_API_KEY=your_api_key
+```
+
+**appsettings.json:**
+```json
+{
+  "Treblle": {
+    "SdkToken": "your_sdk_token",
+    "ApiKey": "your_api_key"
+  }
+}
+```
+
+**Manual Configuration:**
+```csharp
+builder.Services.AddTreblle("your_sdk_token", "your_api_key");
+```
+
+#### **Step 4: Remove Manual Attributes (Optional)**
+```csharp
+// ❌ v1.x - Manual attributes required
+[Treblle]
+public class ProductsController : ControllerBase
+{
+    [Treblle]
+    public IActionResult GetProducts() => Ok();
+}
+
+// ✅ v2.0 - Auto-discovery (attributes optional)
+public class ProductsController : ControllerBase
+{
+    public IActionResult GetProducts() => Ok(); // Automatically tracked!
+}
+
+// Or exclude specific paths
+builder.Services.AddTreblle(options =>
+{
+    options.ExcludedPaths = new[] { "/health", "/internal/*" };
+});
+```
+
+#### **Step 5: Test Your Migration**
+
+Enable debug mode to verify everything works:
+```csharp
+builder.Services.AddTreblle(options =>
+{
+    options.DebugMode = true; // See what's being tracked
+});
+```
+
+### 🎯 Quick Migration Checklist
+
+- [ ] Update to v2.0.0-beta.1 package
+- [ ] Choose configuration approach (auto-config recommended)
+- [ ] Update environment variables or appsettings.json
+- [ ] Remove legacy configuration keys
+- [ ] Test with debug mode enabled
+- [ ] Optionally remove `[Treblle]` attributes (auto-discovery handles this)
+- [ ] Verify excluded paths work as expected
+
+### 🔧 Troubleshooting Common Issues
+
+**"Treblle SDK Token not found" Error:**
+```csharp
+// Ensure you've set one of these:
+// Environment: TREBLLE_SDK_TOKEN
+// Config: Treblle:SdkToken in appsettings.json
+// Or use manual: AddTreblle("token", "key")
+```
+
+**Too Many Endpoints Being Tracked:**
+```csharp
+builder.Services.AddTreblle(options =>
+{
+    options.ExcludedPaths = new[] 
+    {
+        "/health", "/healthz",
+        "/swagger/*", 
+        "/admin/*",
+        "/_*" // Exclude all underscore routes
+    };
+});
+```
+
+**Performance Concerns:**
+```csharp
+builder.Services.AddTreblle(options =>
+{
+    options.DisableMasking = true; // 70% memory reduction
+    options.ExcludedPaths = new[] { "/high-volume/*" };
+});
+```
+
+### 💡 Pro Tips for v2.0
+
+1. **Start with auto-configuration** - it's the simplest approach
+2. **Use environment variables in production** - more secure than config files  
+3. **Enable debug mode during migration** - see exactly what's happening
+4. **Exclude noisy endpoints** - `/health`, `/metrics`, etc.
+5. **Remove old `[Treblle]` attributes gradually** - they still work but aren't needed
+
+### 📞 Need Help?
+
+- 🐛 **Issues**: [GitHub Issues](https://github.com/Treblle/treblle-net-core/issues)
+- 💬 **Community**: [Discord](https://treblle.com/chat)  
+- 📖 **Docs**: [docs.treblle.com](https://docs.treblle.com)
 
 ---
 

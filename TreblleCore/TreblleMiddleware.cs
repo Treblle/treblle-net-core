@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,35 +10,39 @@ using System.Threading.Tasks;
 
 namespace Treblle.Net.Core;
 
-internal class TreblleMiddleware
+internal class TreblleMiddleware : IDisposable
 {
     private readonly RequestDelegate _next;
     private readonly TreblleService _treblleService;
     private readonly TrebllePayloadFactory _trebllePayloadFactory;
     private readonly ILogger<TreblleMiddleware> _logger;
+    private readonly TreblleOptions _options;
     private readonly Channel<TrebllePayload> _channel;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _backgroundTask;
+    private bool _disposed = false;
 
     public TreblleMiddleware(
         RequestDelegate next,
         TreblleService treblleService,
         TrebllePayloadFactory trebllePayloadFactory,
-        ILogger<TreblleMiddleware> logger)
+        ILogger<TreblleMiddleware> logger,
+        IOptions<TreblleOptions> options)
     {
         _next = next;
         _treblleService = treblleService;
         _trebllePayloadFactory = trebllePayloadFactory;
         _logger = logger;
+        _options = options.Value;
 
         // Bounded channel prevents unbounded memory growth
-        var options = new BoundedChannelOptions(1000)
+        var channelOptions = new BoundedChannelOptions(1000)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = false
         };
-        _channel = Channel.CreateBounded<TrebllePayload>(options);
+        _channel = Channel.CreateBounded<TrebllePayload>(channelOptions);
 
         _backgroundTask = Task.Run(() => SendPayloadAsync(_cancellationTokenSource.Token));
     }
@@ -57,7 +62,10 @@ internal class TreblleMiddleware
                     catch (Exception ex)
                     {
                         // Log and discard failed payload immediately - no retry to prevent memory buildup
-                        _logger.LogWarning(ex, "Failed to send payload to Treblle, discarding payload to prevent memory accumulation");
+                        if (_options.DebugMode)
+                        {
+                            _logger.LogDebug(ex, "Treblle Debug: Failed to send payload to Treblle, discarding payload to prevent memory accumulation");
+                        }
                         // Payload is automatically discarded as we don't re-queue it
                     }
                 }
@@ -75,24 +83,95 @@ internal class TreblleMiddleware
 
     public void Dispose()
     {
-        _cancellationTokenSource.Cancel();
-        _channel.Writer.Complete();
-        
-        try
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
         {
-            _backgroundTask.Wait(TimeSpan.FromSeconds(5));
+            if (disposing)
+            {
+                try
+                {
+                    _cancellationTokenSource.Cancel();
+                    _channel.Writer.Complete();
+                    
+                    // Wait for background task to complete with timeout
+                    if (!_backgroundTask.Wait(TimeSpan.FromSeconds(5)))
+                    {
+                        if (_options.DebugMode)
+                        {
+                            _logger.LogDebug("Treblle Debug: Background task did not complete within timeout");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (_options.DebugMode)
+                    {
+                        _logger.LogDebug(ex, "Treblle Debug: Exception during middleware disposal");
+                    }
+                }
+                finally
+                {
+                    _cancellationTokenSource.Dispose();
+                }
+            }
+            
+            _disposed = true;
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Timeout waiting for Treblle background task to complete");
-        }
-        
-        _cancellationTokenSource.Dispose();
     }
 
     public async Task Invoke(HttpContext httpContext)
     {
-        if (httpContext.GetEndpoint()?.Metadata.GetMetadata<TreblleAttribute>() is not null)
+        var treblleAttribute = httpContext.GetEndpoint()?.Metadata.GetMetadata<TreblleAttribute>();
+        var requestPath = httpContext.Request.Path.Value ?? "/";
+        
+        // Determine if this endpoint should be tracked
+        bool shouldTrack;
+        
+        if (treblleAttribute is not null)
+        {
+            // Explicit [Treblle] attribute always enables tracking (unless explicitly excluded)
+            shouldTrack = !PathMatcher.ShouldExcludePath(requestPath, _options.ExcludedPaths);
+            
+            if (_options.DebugMode)
+            {
+                var endpoint = httpContext.GetEndpoint();
+                var route = endpoint?.DisplayName ?? requestPath;
+                if (shouldTrack)
+                {
+                    _logger.LogDebug("Treblle Debug: Processing request with explicit [Treblle] attribute for {Route}", route);
+                }
+                else
+                {
+                    _logger.LogDebug("Treblle Debug: Skipping request - [Treblle] attribute found but path {Route} is in ExcludedPaths", route);
+                }
+            }
+        }
+        else
+        {
+            // Auto-discovery mode: track all endpoints except excluded ones
+            shouldTrack = !PathMatcher.ShouldExcludePath(requestPath, _options.ExcludedPaths);
+            
+            if (_options.DebugMode)
+            {
+                var endpoint = httpContext.GetEndpoint();
+                var route = endpoint?.DisplayName ?? requestPath;
+                if (shouldTrack)
+                {
+                    _logger.LogDebug("Treblle Debug: Auto-discovering endpoint {Route} - tracking enabled", route);
+                }
+                else
+                {
+                    _logger.LogDebug("Treblle Debug: Auto-discovering endpoint {Route} - excluded by ExcludedPaths configuration", route);
+                }
+            }
+        }
+        
+        if (shouldTrack)
         {
             await HandleRequestWithTreblleAsync(httpContext);
         }
@@ -119,8 +198,11 @@ internal class TreblleMiddleware
                 httpContext.Response.ContentLength.Value > maxResponseSize)
             {
                 shouldCaptureResponse = false;
-                _logger.LogDebug("Skipping response capture for large response: {Size} bytes", 
-                    httpContext.Response.ContentLength.Value);
+                if (_options.DebugMode)
+                {
+                    _logger.LogDebug("Treblle Debug: Skipping response capture for large response: {Size} bytes", 
+                        httpContext.Response.ContentLength.Value);
+                }
             }
 
             if (shouldCaptureResponse)
@@ -136,6 +218,20 @@ internal class TreblleMiddleware
                 memoryStream.Position = 0;
                 await memoryStream.CopyToAsync(originalResponseBody);
             }
+        }
+        catch (Exception ex)
+        {
+            // CRITICAL: Never let Treblle crash the user's request
+            if (_options.DebugMode)
+            {
+                _logger.LogDebug(ex, "Treblle Debug: Exception in middleware - continuing request without Treblle tracking");
+            }
+            
+            // Ensure response stream is restored even if we fail
+            httpContext.Response.Body = originalResponseBody;
+            
+            // Re-throw to preserve original application behavior
+            throw;
         }
         finally
         {
@@ -160,7 +256,10 @@ internal class TreblleMiddleware
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to create Treblle payload");
+                    if (_options.DebugMode)
+                    {
+                        _logger.LogDebug(ex, "Treblle Debug: Failed to create Treblle payload");
+                    }
                 }
             }
 

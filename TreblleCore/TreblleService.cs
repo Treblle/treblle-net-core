@@ -27,19 +27,22 @@ internal sealed class TreblleService
     private readonly ILogger<TreblleService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly bool _disableMasking;
+    private readonly bool _debugMode;
 
     public TreblleService(
         IHttpClientFactory httpClientFactory,
         Dictionary<string, string> maskingMap,
         ILogger<TreblleService> logger,
         IServiceProvider serviceProvider,
-        bool disableMasking = false)
+        bool disableMasking = false,
+        bool debugMode = false)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
         _maskingMap = maskingMap;
         _serviceProvider = serviceProvider;
         _disableMasking = disableMasking;
+        _debugMode = debugMode;
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -52,7 +55,10 @@ internal sealed class TreblleService
             const int maxPayloadSizeBytes = 5 * 1024 * 1024; // 5MB
             if (Encoding.UTF8.GetByteCount(jsonPayload) > maxPayloadSizeBytes)
             {
-                _logger.LogWarning("Request payload size exceeds 5MB limit, replacing with size notification");
+                if (_debugMode)
+                {
+                    _logger.LogDebug("Treblle Debug: Request payload size exceeds 5MB limit, replacing with size notification");
+                }
                 
                 // Create a new payload with the large request body replaced
                 var reducedPayload = new TrebllePayload

@@ -66,37 +66,19 @@ internal sealed class TrebllePayloadFactory
     }
 
     /// <summary>
-    /// Gets the effective SDK token, handling backward compatibility
+    /// Gets the SDK token for authentication
     /// </summary>
     private string GetEffectiveSdkToken()
     {
-        // Priority: SdkToken > LegacyApiKey (for backward compatibility)
-        if (!string.IsNullOrEmpty(_treblleOptions.SdkToken))
-            return _treblleOptions.SdkToken;
-        
-        #pragma warning disable CS0618 // Type or member is obsolete
-        if (!string.IsNullOrEmpty(_treblleOptions.LegacyApiKey))
-            return _treblleOptions.LegacyApiKey;
-        #pragma warning restore CS0618 // Type or member is obsolete
-        
-        return string.Empty;
+        return _treblleOptions.SdkToken ?? string.Empty;
     }
 
     /// <summary>
-    /// Gets the effective API key, handling backward compatibility
+    /// Gets the API key for project identification
     /// </summary>
     private string GetEffectiveApiKey()
     {
-        // Priority: ApiKey > ProjectId (for backward compatibility)
-        if (!string.IsNullOrEmpty(_treblleOptions.ApiKey))
-            return _treblleOptions.ApiKey;
-        
-        #pragma warning disable CS0618 // Type or member is obsolete
-        if (!string.IsNullOrEmpty(_treblleOptions.ProjectId))
-            return _treblleOptions.ProjectId;
-        #pragma warning restore CS0618 // Type or member is obsolete
-        
-        return string.Empty;
+        return _treblleOptions.ApiKey ?? string.Empty;
     }
 
     private static void AddLanguage(TrebllePayload payload)
@@ -244,13 +226,21 @@ internal sealed class TrebllePayloadFactory
 
                     if (contentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (IsValidJson(bodyData))
+                        if (string.IsNullOrWhiteSpace(bodyData))
+                        {
+                            // Empty body is valid for requests like GET, HEAD, DELETE
+                            payload.Data.Request.Body = null;
+                        }
+                        else if (IsValidJson(bodyData))
                         {
                             payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(bodyData, JsonOptions);
                         }
                         else
                         {
-                            _logger.LogWarning("Invalid JSON detected in request.");
+                            if (_treblleOptions.DebugMode)
+                            {
+                                _logger.LogDebug("Treblle Debug: Invalid JSON detected in request body");
+                            }
                         }
                     }
                     else if (contentType.Contains("text/plain", StringComparison.OrdinalIgnoreCase))
@@ -321,19 +311,30 @@ internal sealed class TrebllePayloadFactory
                             using var responseReader = new StreamReader(response, leaveOpen: true);
                             var responseContent = await responseReader.ReadToEndAsync();
 
-                            if (IsValidJson(responseContent))
+                            if (string.IsNullOrWhiteSpace(responseContent))
+                            {
+                                // Empty response body is valid for responses like 204 No Content
+                                payload.Data.Response.Body = null;
+                            }
+                            else if (IsValidJson(responseContent))
                             {
                                 payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(responseContent, JsonOptions);
                             }
                             else
                             {
-                                _logger.LogWarning("Invalid JSON detected in response.");
+                                if (_treblleOptions.DebugMode)
+                                {
+                                    _logger.LogDebug("Treblle Debug: Invalid JSON detected in response body");
+                                }
                             }
                             payload.Data.Response.Size = response.Length;
                         }
                         catch (Exception e)
                         {
-                            _logger.LogWarning(e, "Error ocurred while reading response content.");
+                            if (_treblleOptions.DebugMode)
+                            {
+                                _logger.LogDebug(e, "Treblle Debug: Error occurred while reading response content");
+                            }
 
                         }
                     }
