@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,6 +23,15 @@ internal sealed class TreblleService
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // Faster encoding
     };
+
+    private static readonly string[] TreblleEndpoints = new[]
+    {
+        "https://rocknrolla.treblle.com",
+        "https://punisher.treblle.com", 
+        "https://sicario.treblle.com"
+    };
+
+    private static readonly Random Random = new();
 
     private readonly Dictionary<string, string> _maskingMap;
     private readonly HttpClient _httpClient;
@@ -49,7 +60,7 @@ internal sealed class TreblleService
     {
         try
         {
-            var jsonPayload = JsonSerializer.Serialize(payload, JsonOptions);
+            var jsonPayload = JsonSerializer.Serialize(payload, TreblleJsonContext.Default.TrebllePayload);
 
             // Check if payload exceeds 5MB limit
             const int maxPayloadSizeBytes = 5 * 1024 * 1024; // 5MB
@@ -88,15 +99,28 @@ internal sealed class TreblleService
                     }
                 };
                 
-                jsonPayload = JsonSerializer.Serialize(reducedPayload, JsonOptions);
+                jsonPayload = JsonSerializer.Serialize(reducedPayload, TreblleJsonContext.Default.TrebllePayload);
             }
 
             var finalJsonPayload = _disableMasking 
                 ? jsonPayload 
                 : jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
 
-            using HttpContent content = new StringContent(finalJsonPayload ?? string.Empty, Encoding.UTF8, "application/json");
-            using var httpResponseMessage = await _httpClient.PostAsync(string.Empty, content);
+            var randomEndpoint = TreblleEndpoints[Random.Next(TreblleEndpoints.Length)];
+            
+            var jsonBytes = Encoding.UTF8.GetBytes(finalJsonPayload ?? string.Empty);
+            var compressedBytes = CompressData(jsonBytes);
+            
+            using HttpContent content = new ByteArrayContent(compressedBytes);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            
+            // Only add gzip header if we actually compressed the data
+            if (compressedBytes.Length < jsonBytes.Length)
+            {
+                content.Headers.ContentEncoding.Add("gzip");
+            }
+            
+            using var httpResponseMessage = await _httpClient.PostAsync(randomEndpoint, content);
             return httpResponseMessage;
         }
         catch (Exception ex)
@@ -108,5 +132,20 @@ internal sealed class TreblleService
 
             return null;
         }
+    }
+
+    private static byte[] CompressData(byte[] data)
+    {
+        // Skip compression for small payloads - not worth the overhead
+        if (data.Length < 1024)
+            return data;
+            
+        // Pre-size output stream to avoid buffer reallocations during compression
+        using var output = new MemoryStream(data.Length / 3);
+        using (var gzipStream = new GZipStream(output, CompressionLevel.Fastest))
+        {
+            gzipStream.Write(data, 0, data.Length);
+        }
+        return output.ToArray();
     }
 }

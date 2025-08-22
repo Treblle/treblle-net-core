@@ -35,8 +35,8 @@ internal class TreblleMiddleware : IDisposable
         _logger = logger;
         _options = options.Value;
 
-        // Bounded channel prevents unbounded memory growth
-        var channelOptions = new BoundedChannelOptions(1000)
+        // Bounded channel prevents unbounded memory growth - increased capacity for high-volume scenarios
+        var channelOptions = new BoundedChannelOptions(3000)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,

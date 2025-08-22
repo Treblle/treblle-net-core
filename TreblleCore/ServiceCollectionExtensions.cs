@@ -14,7 +14,6 @@ namespace Treblle.Net.Core;
 
 public static class ServiceCollectionExtensions
 {
-    private static readonly Uri DefaultApiUri = new("https://rocknrolla.treblle.com");
     private static readonly Dictionary<string, string> maskingMap = new()
     {
         { "password", "DefaultStringMasker" },
@@ -153,8 +152,14 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
-            httpClient.BaseAddress = DefaultApiUri;
             httpClient.DefaultRequestHeaders.Add("x-api-key", options.SdkToken);
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            UseCookies = false, // Treblle API doesn't use cookies - disabling saves memory and processing
+            UseProxy = false,   // Skip proxy detection for better performance
+            EnableMultipleHttp2Connections = true // Enable HTTP/2 multiplexing for better throughput
         });
 
         // Register masker types individually (replacement for keyed services)
@@ -263,11 +268,6 @@ public static class ServiceCollectionExtensions
             
             // Apply additional configuration if provided
             configureOptions?.Invoke(o);
-        });
-        services.AddHttpClient("Treblle", httpClient =>
-        { 
-            httpClient.BaseAddress = DefaultApiUri;
-            httpClient.DefaultRequestHeaders.Add("x-api-key", sdkToken);
         });
 
         // Register masker types individually (replacement for keyed services)

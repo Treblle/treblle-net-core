@@ -28,6 +28,14 @@ internal sealed class TrebllePayloadFactory
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
+    // Cache static system information to avoid repeated allocations
+    private static readonly string CachedOSName = Environment.OSVersion.ToString();
+    private static readonly string CachedOSVersion = Environment.OSVersion.Version.ToString();
+    private static readonly string CachedArchitecture = RuntimeInformation.ProcessArchitecture.ToString();
+    private static readonly string CachedTimezone = (!string.IsNullOrEmpty(TimeZoneInfo.Local.StandardName))
+        ? TimeZoneInfo.Local.StandardName
+        : "UTC";
+
     private readonly TreblleOptions _treblleOptions;
     private readonly ILogger<TrebllePayloadFactory> _logger;
 
@@ -90,16 +98,14 @@ internal sealed class TrebllePayloadFactory
     private static void AddServer(HttpContext httpContext, TrebllePayload payload)
     {
         payload.Data.Server.Ip = httpContext.Connection.LocalIpAddress?.MapToIPv4()?.ToString() ?? "bogon";
-        payload.Data.Server.Timezone = (!string.IsNullOrEmpty(TimeZoneInfo.Local.StandardName))
-            ? TimeZoneInfo.Local.StandardName
-            : "UTC";
+        payload.Data.Server.Timezone = CachedTimezone;
         payload.Data.Server.Software = httpContext.GetServerVariable("SERVER_SOFTWARE");
         payload.Data.Server.Signature = null;
         payload.Data.Server.Protocol = httpContext.Request.Protocol;
 
-        payload.Data.Server.Os.Name = Environment.OSVersion.ToString();
-        payload.Data.Server.Os.Release = Environment.OSVersion.Version.ToString();
-        payload.Data.Server.Os.Architecture = RuntimeInformation.ProcessArchitecture.ToString();
+        payload.Data.Server.Os.Name = CachedOSName;
+        payload.Data.Server.Os.Release = CachedOSVersion;
+        payload.Data.Server.Os.Architecture = CachedArchitecture;
     }
 
     private async Task AddRequest(HttpContext httpContext, TrebllePayload payload)
@@ -233,7 +239,7 @@ internal sealed class TrebllePayloadFactory
                         }
                         else if (IsValidJson(bodyData))
                         {
-                            payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(bodyData, JsonOptions);
+                            payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(bodyData, TreblleJsonContext.Default.JsonElement);
                         }
                         else
                         {
@@ -250,8 +256,8 @@ internal sealed class TrebllePayloadFactory
                     else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
                     {
                         var doc = XDocument.Parse(bodyData);
-                        var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), JsonOptions);
-                        payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, JsonOptions);
+                        var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), TreblleJsonContext.Default.Object);
+                        payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, TreblleJsonContext.Default.JsonElement);
                     }
                     else
                     {
@@ -318,7 +324,7 @@ internal sealed class TrebllePayloadFactory
                             }
                             else if (IsValidJson(responseContent))
                             {
-                                payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(responseContent, JsonOptions);
+                                payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(responseContent, TreblleJsonContext.Default.JsonElement);
                             }
                             else
                             {
@@ -421,7 +427,7 @@ internal sealed class TrebllePayloadFactory
     {
         try
         {
-            JsonSerializer.Deserialize<JsonElement>(str, JsonOptions);
+            JsonSerializer.Deserialize<JsonElement>(str, TreblleJsonContext.Default.JsonElement);
             return true;
         }
         catch (JsonException)
