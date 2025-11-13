@@ -156,6 +156,84 @@ app.UseTreblle();
 
 That's it! Treblle will now **automatically track all your API endpoints**. 🎉
 
+## .NET 9+ and Multi-Environment Support
+
+### Multi-Environment Configuration
+
+For applications with multiple environments (Development, Staging, Production), use environment-specific `appsettings.{Environment}.json` files:
+
+**appsettings.Development.json:**
+```json
+{
+  "Treblle": {
+    "SdkToken": "dev_sdk_token",
+    "ApiKey": "dev_api_key"
+  }
+}
+```
+
+**appsettings.Production.json:**
+```json
+{
+  "Treblle": {
+    "SdkToken": "prod_sdk_token",
+    "ApiKey": "prod_api_key"
+  }
+}
+```
+
+**Program.cs (works for .NET 6, 8, and 9+):**
+```csharp
+using Treblle.Net.Core;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Auto-detects credentials from appsettings.{Environment}.json
+builder.Services.AddTreblle();
+
+// OR explicitly read from configuration
+builder.Services.AddTreblle(
+    builder.Configuration["Treblle:SdkToken"]!,
+    builder.Configuration["Treblle:ApiKey"]!
+);
+
+var app = builder.Build();
+app.UseTreblle();
+app.Run();
+```
+
+**Legacy Startup.cs (still supported):**
+```csharp
+using Treblle.Net.Core;
+
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Auto-detects credentials from appsettings.{Environment}.json
+        services.AddTreblle();
+
+        // OR explicitly read from configuration
+        // services.AddTreblle(
+        //     Configuration["Treblle:SdkToken"],
+        //     Configuration["Treblle:ApiKey"]
+        // );
+    }
+
+    public void Configure(IApplicationBuilder app)
+    {
+        app.UseTreblle();
+        app.UseRouting();
+        app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
+    }
+}
+```
+
+> **⚠️ Important:** Do NOT use `app.config` files. The SDK only reads from:
+> 1. Environment variables: `TREBLLE_SDK_TOKEN` and `TREBLLE_API_KEY`
+> 2. appsettings.json: `Treblle:SdkToken` and `Treblle:ApiKey`
+> 3. Manual configuration via `AddTreblle(sdkToken, apiKey)` parameters
+
 ## Configuration Options
 
 Treblle offers several configuration options:

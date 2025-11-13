@@ -30,14 +30,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="tools\**\*">
-      <Pack>true</Pack>
-      <PackagePath>tools\</PackagePath>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="tools\init.ps1" />
     <None Include="..\README.md" />
     <None Include="resources\TreblleIcon.png">
       <Pack>True</Pack>
