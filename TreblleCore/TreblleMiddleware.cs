@@ -229,6 +229,7 @@ internal class TreblleMiddleware : IDisposable
             
             // Ensure response stream is restored even if we fail
             httpContext.Response.Body = originalResponseBody;
+            httpContext.Response.StatusCode = 500;
             
             // Re-throw to preserve original application behavior
             throw;
