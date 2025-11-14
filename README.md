@@ -10,8 +10,8 @@ Treblle is an API intelligence platfom that helps developers, teams and organiza
 
 ## Treblle .NET Core SDK
 
-[![Latest Version](https://img.shields.io/nuget/v/Treblle.Net.Core)](https://www.npmjs.com/package/Treblle.Net.Core)
-[![Total Downloads](https://img.shields.io/nuget/dt/Treblle.Net.Core)](https://www.npmjs.com/package/treblle)
+[![Latest Version](https://img.shields.io/nuget/v/Treblle.Net.Core)](https://www.nuget.org/packages/Treblle.Net.Core)
+[![Total Downloads](https://img.shields.io/nuget/dt/Treblle.Net.Core)](https://www.nuget.org/packages/Treblle.Net.Core)
 
 ## Requirements
 
