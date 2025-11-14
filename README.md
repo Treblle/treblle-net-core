@@ -412,8 +412,13 @@ using Treblle.Net.Core;
 builder.Services.AddTreblle(
     builder.Configuration["Treblle:SdkToken"],
     builder.Configuration["Treblle:ApiKey"],
-    new Dictionary<string, string>( { { "customercreditCard", "CreditCardMasker" }, { "firstName", "DefaultStringMasker" } });
+    new Dictionary<string, string>()
+    {
+        { "customercreditCard", "CreditCardMasker" }, 
+        { "firstName", "DefaultStringMasker" }
+    }
 );
+
 
 // Build your application
 var app = builder.Build();
