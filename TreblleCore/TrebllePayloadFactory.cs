@@ -167,11 +167,11 @@ internal sealed class TrebllePayloadFactory
                 
                 if (requestLength > maxRequestSize)
                 {
-                    payload.Data.Request.Body = new
+                    payload.Data.Request.Body = new Dictionary<string, object>
                     {
-                        __message = "Request data was larger than 5MB",
-                        __size = requestLength,
-                        __type = "large_request"
+                        ["__message"] = "Request data was larger than 5MB",
+                        ["__size"] = requestLength,
+                        ["__type"] = "large_request"
                     };
                     return;
                 }
@@ -188,11 +188,11 @@ internal sealed class TrebllePayloadFactory
                 {
                     // Just get content length and content type
                     var length = httpContext.Request.ContentLength ?? 0;
-                    payload.Data.Request.Body = new
+                    payload.Data.Request.Body = new Dictionary<string, object>
                     {
-                        __type = "file",
-                        length = length,
-                        contentType
+                        ["__type"] = "file",
+                        ["length"] = length,
+                        ["contentType"] = contentType
                     };
                 }
                 else if (httpContext.Request.HasFormContentType)
@@ -212,11 +212,11 @@ internal sealed class TrebllePayloadFactory
                         });
                     }
 
-                    if (fileList.Any())
+                    if (fileList.Count > 0)
                     {
-                        payload.Data.Request.Body = new
+                        payload.Data.Request.Body = new Dictionary<string, object>
                         {
-                            Files = fileList
+                            ["Files"] = fileList
                         };
                     }
                     else
@@ -299,11 +299,11 @@ internal sealed class TrebllePayloadFactory
                 
                 if (responseLength > maxResponseSize)
                 {
-                    payload.Data.Response.Body = new
+                    payload.Data.Response.Body = new Dictionary<string, object?>
                     {
-                        __message = "Response data was larger than 5MB",
-                        __size = responseLength,
-                        __type = "large_response"
+                        ["__message"] = "Response data was larger than 5MB",
+                        ["__size"] = responseLength,
+                        ["__type"] = "large_response"
                     };
                     payload.Data.Response.Size = responseLength;
                 }
