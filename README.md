@@ -494,7 +494,6 @@ app.UseTreblle(useExceptionHandler: false);
 You may want to disable Treblle's exception handler if:
 - You're using a custom exception handling middleware
 - You have specific exception handling requirements
-- You want to prevent duplicate exception logging
 
 ### Default Behavior
 
