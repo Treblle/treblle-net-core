@@ -6,7 +6,7 @@ namespace Treblle.Net.Core;
 
 public static class ApplicationBuilderExtensions
 {
-    public static IApplicationBuilder UseTreblle(this IApplicationBuilder app, bool useExceptionHandler = false)
+    public static IApplicationBuilder UseTreblle(this IApplicationBuilder app, bool useExceptionHandler = true)
     {
         if (useExceptionHandler)
         {

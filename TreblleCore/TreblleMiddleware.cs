@@ -187,6 +187,7 @@ internal class TreblleMiddleware : IDisposable
         var stopwatch = Stopwatch.StartNew();
         MemoryStream? memoryStream = null;
         bool shouldCaptureResponse = true;
+        bool exceptionOccurred = false;
         
         try
         {
@@ -229,7 +230,7 @@ internal class TreblleMiddleware : IDisposable
             
             // Ensure response stream is restored even if we fail
             httpContext.Response.Body = originalResponseBody;
-            httpContext.Response.StatusCode = 500;
+            exceptionOccurred = true;
             
             // Re-throw to preserve original application behavior
             throw;
@@ -242,40 +243,43 @@ internal class TreblleMiddleware : IDisposable
             httpContext.Items["elapsedMiliseconds"] = elapsedMiliseconds;
 
             // Create and send payload with accurate timing that includes response stream copy
-            try
+            if (!exceptionOccurred)
             {
-                _logger.LogDebug("Treblle timing: {ElapsedMs}ms", elapsedMiliseconds);
-                
-                // Final check: only create payload if response should be tracked
-                if (ApiRequestFilter.ShouldTrackResponse(httpContext))
+                try
                 {
-                    var payload = await _trebllePayloadFactory.CreateAsync(
-                        httpContext,
-                        memoryStream,
-                        elapsedMiliseconds);
-
-                    _channel.Writer.TryWrite(payload);
+                    _logger.LogDebug("Treblle timing: {ElapsedMs}ms", elapsedMiliseconds);
                     
-                    if (_options.DebugMode)
+                    // Final check: only create payload if response should be tracked
+                    if (ApiRequestFilter.ShouldTrackResponse(httpContext))
                     {
-                        var contentType = httpContext.Response.ContentType ?? "unknown";
-                        _logger.LogDebug("[TREBLLE]: Tracked response with content type: {ContentType}", contentType);
+                        var payload = await _trebllePayloadFactory.CreateAsync(
+                            httpContext,
+                            memoryStream,
+                            elapsedMiliseconds);
+
+                        _channel.Writer.TryWrite(payload);
+                        
+                        if (_options.DebugMode)
+                        {
+                            var contentType = httpContext.Response.ContentType ?? "unknown";
+                            _logger.LogDebug("[TREBLLE]: Tracked response with content type: {ContentType}", contentType);
+                        }
+                    }
+                    else
+                    {
+                        if (_options.DebugMode)
+                        {
+                            var contentType = httpContext.Response.ContentType ?? "unknown";
+                            _logger.LogDebug("[TREBLLE]: Skipped response - non-API content type: {ContentType}", contentType);
+                        }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
                     if (_options.DebugMode)
                     {
-                        var contentType = httpContext.Response.ContentType ?? "unknown";
-                        _logger.LogDebug("[TREBLLE]: Skipped response - non-API content type: {ContentType}", contentType);
+                        _logger.LogDebug(ex, "[TREBLLE]: Failed to create Treblle payload");
                     }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (_options.DebugMode)
-                {
-                    _logger.LogDebug(ex, "[TREBLLE]: Failed to create Treblle payload");
                 }
             }
 
