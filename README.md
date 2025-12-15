@@ -480,6 +480,28 @@ app.UseTreblle();
 
 **Performance Impact:** Disabling masking can reduce memory usage by up to 70% for large payloads, as it skips JSON parsing, object tree creation, and field processing operations. This is particularly beneficial for APIs handling large response bodies or high request volumes.
 
+## Disabling the Exception Handler
+
+By default, Treblle captures and reports exceptions that occur during request processing. If you need to disable this behavior, you can configure it when registering the middleware:
+```csharp
+app.UseTreblle(useExceptionHandler: false);
+```
+
+> **⚠️ Note:** When the exception handler is disabled, requests that result in exceptions will not appear on your Treblle dashboard.
+
+### When to Disable
+
+You may want to disable Treblle's exception handler if:
+- You're using a custom exception handling middleware
+- You have specific exception handling requirements
+
+### Default Behavior
+
+When enabled (default), Treblle's exception handler will:
+- Capture unhandled exceptions during request processing
+- Log exception details to your Treblle dashboard
+- Allow you to monitor and debug API errors in real-time
+
 ## Upgrading to v2.0
 
 Treblle .NET Core v2.0 introduces major improvements with **breaking changes**. This guide will help you migrate from v1.x.
