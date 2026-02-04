@@ -39,6 +39,7 @@ internal sealed class TreblleService
     private readonly IServiceProvider _serviceProvider;
     private readonly bool _disableMasking;
     private readonly bool _debugMode;
+    private readonly string? _customIngressEndpoint;
 
     public TreblleService(
         IHttpClientFactory httpClientFactory,
@@ -46,7 +47,8 @@ internal sealed class TreblleService
         ILogger<TreblleService> logger,
         IServiceProvider serviceProvider,
         bool disableMasking = false,
-        bool debugMode = false)
+        bool debugMode = false,
+        string? customIngressEndpoint = null)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
@@ -54,6 +56,7 @@ internal sealed class TreblleService
         _serviceProvider = serviceProvider;
         _disableMasking = disableMasking;
         _debugMode = debugMode;
+        _customIngressEndpoint = customIngressEndpoint;
     }
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
@@ -106,7 +109,9 @@ internal sealed class TreblleService
                 ? jsonPayload 
                 : jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
 
-            var randomEndpoint = TreblleEndpoints[Random.Next(TreblleEndpoints.Length)];
+            var endpoint = !string.IsNullOrWhiteSpace(_customIngressEndpoint)
+                ? _customIngressEndpoint
+                : TreblleEndpoints[Random.Next(TreblleEndpoints.Length)];
             
             var jsonBytes = Encoding.UTF8.GetBytes(finalJsonPayload ?? string.Empty);
             var compressedBytes = CompressData(jsonBytes);
@@ -120,7 +125,7 @@ internal sealed class TreblleService
                 content.Headers.ContentEncoding.Add("gzip");
             }
             
-            using var httpResponseMessage = await _httpClient.PostAsync(randomEndpoint, content);
+            using var httpResponseMessage = await _httpClient.PostAsync(endpoint, content);
             return httpResponseMessage;
         }
         catch (Exception ex)
