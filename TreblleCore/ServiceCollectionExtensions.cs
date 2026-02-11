@@ -110,12 +110,22 @@ public static class ServiceCollectionExtensions
                 var (sdkToken, apiKey) = GetTreblleCredentials(configuration);
                 options.SdkToken = sdkToken;
                 options.ApiKey = apiKey;
+                options.CustomIngressEndpoint = GetCustomIngressEndpoint(configuration);
             });
 
         if (configureOptions != null)
         {
             services.PostConfigure<TreblleOptions>(configureOptions);
         }
+
+        // Validate and normalize custom ingress endpoint if provided via options action
+        services.PostConfigure<TreblleOptions>(options =>
+        {
+            if (!string.IsNullOrWhiteSpace(options.CustomIngressEndpoint))
+            {
+                options.CustomIngressEndpoint = ValidateAndNormalizeIngressEndpoint(options.CustomIngressEndpoint);
+            }
+        });
 
         // Register services without credential validation since they're handled by options
         services.TryAddTransient<TreblleService>(serviceProvider =>
@@ -144,7 +154,7 @@ public static class ServiceCollectionExtensions
                 }
             }
 
-            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode);
+            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode, options.CustomIngressEndpoint);
         });
 
         services.TryAddSingleton<TrebllePayloadFactory>();
@@ -254,9 +264,9 @@ public static class ServiceCollectionExtensions
                 }
             }
 
-            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode);
+            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode, options.CustomIngressEndpoint);
         });
-        
+
         services.TryAddSingleton<TrebllePayloadFactory>();
         services.Configure<TreblleOptions>(o =>
         {
@@ -268,6 +278,12 @@ public static class ServiceCollectionExtensions
 
             // Apply additional configuration if provided
             configureOptions?.Invoke(o);
+
+            // Validate and normalize custom ingress endpoint if provided
+            if (!string.IsNullOrWhiteSpace(o.CustomIngressEndpoint))
+            {
+                o.CustomIngressEndpoint = ValidateAndNormalizeIngressEndpoint(o.CustomIngressEndpoint);
+            }
         });
 
         services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
@@ -337,6 +353,54 @@ public static class ServiceCollectionExtensions
         }
 
         return (sdkToken, apiKey);
+    }
+
+    /// <summary>
+    /// Gets the custom ingress endpoint from environment variable or configuration.
+    /// Returns null if not configured.
+    /// </summary>
+    private static string? GetCustomIngressEndpoint(IConfiguration configuration)
+    {
+        var endpoint =
+            // Environment variable has highest precedence
+            Environment.GetEnvironmentVariable("TREBLLE_CUSTOM_INGRESS_ENDPOINT") ??
+            // Configuration from appsettings.json
+            configuration["Treblle:CustomIngressEndpoint"];
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return null;
+        }
+
+        return ValidateAndNormalizeIngressEndpoint(endpoint);
+    }
+
+    /// <summary>
+    /// Validates and normalizes a custom ingress endpoint URL.
+    /// </summary>
+    /// <param name="endpoint">The endpoint URL to validate</param>
+    /// <returns>The normalized endpoint URL (without trailing slash)</returns>
+    /// <exception cref="ArgumentException">Thrown when the URL is invalid</exception>
+    private static string ValidateAndNormalizeIngressEndpoint(string endpoint)
+    {
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+        {
+            throw new ArgumentException(
+                $"Invalid CustomIngressEndpoint URL: '{endpoint}'. Must be a valid absolute URL.",
+                nameof(endpoint));
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ArgumentException(
+                $"Invalid CustomIngressEndpoint URL: '{endpoint}'. Must use HTTPS scheme.",
+                nameof(endpoint));
+        }
+
+        // Normalize: remove trailing slash
+        var normalizedUrl = uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath.TrimEnd('/');
+
+        return normalizedUrl;
     }
 
 }

@@ -243,6 +243,7 @@ Treblle offers several configuration options:
 | `ExcludedPaths` | `null` | Exclude specific paths or endpoints from Treblle |
 | `DebugMode` | `false` | Enable detailed logging for troubleshooting |
 | `DisableMasking` | `false` | Disable data masking if not needed |
+| `CustomIngressEndpoint` | `null` | Custom endpoint URL for sending telemetry data |
 
 **Example with all options:**
 ```csharp
@@ -318,6 +319,43 @@ All debug logs are prefixed with "[TREBLLE]:" and use `LogDebug` level, making t
 ```
 
 **Note:** Debug mode should typically only be enabled in development or staging environments as it increases log verbosity.
+
+### Custom Ingress Endpoint
+
+By default, Treblle sends telemetry data to its global endpoints. If you need to route data through a specific regional endpoint or a custom ingress URL, you can configure a custom ingress endpoint.
+
+**Option A: Environment Variable**
+```bash
+export TREBLLE_CUSTOM_INGRESS_ENDPOINT=https://ingress-eu.treblle.com
+```
+
+**Option B: appsettings.json**
+```json
+{
+  "Treblle": {
+    "SdkToken": "your_sdk_token",
+    "ApiKey": "your_api_key",
+    "CustomIngressEndpoint": "https://ingress-eu.treblle.com"
+  }
+}
+```
+
+**Option C: Programmatic Configuration**
+```csharp
+// Import the Treblle SDK
+using Treblle.Net.Core;
+
+builder.Services.AddTreblle(options =>
+{
+    options.CustomIngressEndpoint = "https://ingress-eu.treblle.com";
+});
+
+// Build your application
+var app = builder.Build();
+
+// Enable the Treblle Middleware
+app.UseTreblle();
+```
 
 ### Excluding endpoints or paths
 

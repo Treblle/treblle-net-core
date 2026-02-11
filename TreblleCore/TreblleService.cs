@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -39,6 +40,8 @@ internal sealed class TreblleService
     private readonly IServiceProvider _serviceProvider;
     private readonly bool _disableMasking;
     private readonly bool _debugMode;
+    private readonly string? _customIngressEndpoint;
+    private readonly ThrottleState _throttleState = new();
 
     public TreblleService(
         IHttpClientFactory httpClientFactory,
@@ -46,7 +49,8 @@ internal sealed class TreblleService
         ILogger<TreblleService> logger,
         IServiceProvider serviceProvider,
         bool disableMasking = false,
-        bool debugMode = false)
+        bool debugMode = false,
+        string? customIngressEndpoint = null)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
@@ -54,7 +58,13 @@ internal sealed class TreblleService
         _serviceProvider = serviceProvider;
         _disableMasking = disableMasking;
         _debugMode = debugMode;
+        _customIngressEndpoint = customIngressEndpoint;
     }
+
+    /// <summary>
+    /// Checks if payloads should be throttled due to rate limiting.
+    /// </summary>
+    public bool ShouldThrottle() => _throttleState.ShouldThrottle();
 
     public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
     {
@@ -106,7 +116,9 @@ internal sealed class TreblleService
                 ? jsonPayload 
                 : jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
 
-            var randomEndpoint = TreblleEndpoints[Random.Next(TreblleEndpoints.Length)];
+            var endpoint = !string.IsNullOrWhiteSpace(_customIngressEndpoint)
+                ? _customIngressEndpoint
+                : TreblleEndpoints[Random.Next(TreblleEndpoints.Length)];
             
             var jsonBytes = Encoding.UTF8.GetBytes(finalJsonPayload ?? string.Empty);
             var compressedBytes = CompressData(jsonBytes);
@@ -120,7 +132,27 @@ internal sealed class TreblleService
                 content.Headers.ContentEncoding.Add("gzip");
             }
             
-            using var httpResponseMessage = await _httpClient.PostAsync(randomEndpoint, content);
+            using var httpResponseMessage = await _httpClient.PostAsync(endpoint, content);
+
+            if (httpResponseMessage.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var retryAfter = ParseRetryAfter(httpResponseMessage);
+                _throttleState.RecordThrottleResponse(retryAfter);
+
+                if (_debugMode)
+                {
+                    _logger.LogDebug("[TREBLLE]: Rate limited (429) - backing off for {Seconds}s",
+                        retryAfter ?? 0);
+                }
+
+                return httpResponseMessage;
+            }
+
+            if (httpResponseMessage.IsSuccessStatusCode)
+            {
+                _throttleState.RecordSuccess();
+            }
+
             return httpResponseMessage;
         }
         catch (Exception ex)
@@ -132,6 +164,21 @@ internal sealed class TreblleService
 
             return null;
         }
+    }
+
+    private static int? ParseRetryAfter(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues("Retry-After", out var values))
+        {
+            foreach (var value in values)
+            {
+                if (int.TryParse(value, out var seconds))
+                {
+                    return seconds;
+                }
+            }
+        }
+        return null;
     }
 
     private static byte[] CompressData(byte[] data)

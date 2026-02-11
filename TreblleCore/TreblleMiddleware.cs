@@ -55,6 +55,16 @@ internal class TreblleMiddleware : IDisposable
             {
                 while (_channel.Reader.TryRead(out var payload))
                 {
+                    // Check if we're being rate limited - drop payload silently if so
+                    if (_treblleService.ShouldThrottle())
+                    {
+                        if (_options.DebugMode)
+                        {
+                            _logger.LogDebug("[TREBLLE]: Payload dropped - rate limited");
+                        }
+                        continue; // Drop payload and process next
+                    }
+
                     try
                     {
                         await _treblleService.SendPayloadAsync(payload);

@@ -35,4 +35,13 @@ public sealed class TreblleOptions
     /// Case-insensitive matching is used.
     /// </summary>
     public string[]? ExcludedPaths { get; set; } = null;
+
+    /// <summary>
+    /// Custom ingress endpoint URL for sending telemetry data.
+    /// When set, this endpoint will be used instead of the default Treblle endpoints.
+    /// Must be a valid HTTPS URL. Trailing slashes will be removed automatically.
+    /// Example: "https://ingress-eu.treblle.com"
+    /// Can also be set via TREBLLE_CUSTOM_INGRESS_ENDPOINT environment variable.
+    /// </summary>
+    public string? CustomIngressEndpoint { get; set; }
 }
