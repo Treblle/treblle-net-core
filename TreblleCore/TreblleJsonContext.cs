@@ -11,6 +11,7 @@ namespace Treblle.Net.Core;
 [JsonSerializable(typeof(TrebllePayload))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(object))] // For dynamic request/response bodies
+[JsonSerializable(typeof(List<object>))] 
 [JsonSerializable(typeof(string))] // For dictionary values
 [JsonSerializable(typeof(Dictionary<string, object>))] // For headers
 [JsonSerializable(typeof(Dictionary<string, string>))] // For form data and masking config
