@@ -253,11 +253,22 @@ internal sealed class TrebllePayloadFactory
                     {
                         payload.Data.Request.Body = bodyData;
                     }
-                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
+                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase)
+                        || contentType.Contains("text/xml", StringComparison.OrdinalIgnoreCase))
                     {
-                        var doc = XDocument.Parse(bodyData);
-                        var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), TreblleJsonContext.Default.Object);
-                        payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, TreblleJsonContext.Default.JsonElement);
+                        try
+                        {
+                            var doc = XDocument.Parse(bodyData);
+                            var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), TreblleJsonContext.Default.Object);
+                            payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, TreblleJsonContext.Default.JsonElement);
+                        }
+                        catch (Exception)
+                        {
+                            if (_treblleOptions.DebugMode)
+                            {
+                                _logger.LogDebug("[TREBLLE]: Skipping request body - XML contains invalid characters");
+                            }
+                        }
                     }
                     else
                     {
