@@ -374,7 +374,6 @@ internal sealed class TrebllePayloadFactory
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
                     if (_treblleOptions.DebugMode)
                     {
                         _logger.LogDebug(e, "Treblle Debug: Error occurred while reading XML response content");
