@@ -183,7 +183,7 @@ internal class TreblleMiddleware : IDisposable
         
         if (shouldTrack)
         {
-            await HandleRequestWithTreblleAsync(httpContext);
+            await HandleRequestWithTreblleAsync(httpContext, treblleAttribute);
         }
         else
         {
@@ -191,7 +191,7 @@ internal class TreblleMiddleware : IDisposable
         }
     }
 
-    private async Task HandleRequestWithTreblleAsync(HttpContext httpContext)
+    private async Task HandleRequestWithTreblleAsync(HttpContext httpContext, TreblleAttribute? treblleAttribute)
     {
         var originalResponseBody = httpContext.Response.Body;
         var stopwatch = Stopwatch.StartNew();
@@ -265,7 +265,8 @@ internal class TreblleMiddleware : IDisposable
                         var payload = await _trebllePayloadFactory.CreateAsync(
                             httpContext,
                             memoryStream,
-                            elapsedMiliseconds);
+                            elapsedMiliseconds,
+                            treblleAttribute: treblleAttribute);
 
                         _channel.Writer.TryWrite(payload);
                         
