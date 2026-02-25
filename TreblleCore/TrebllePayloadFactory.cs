@@ -253,11 +253,22 @@ internal sealed class TrebllePayloadFactory
                     {
                         payload.Data.Request.Body = bodyData;
                     }
-                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
+                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase)
+                        || contentType.Contains("text/xml", StringComparison.OrdinalIgnoreCase))
                     {
-                        var doc = XDocument.Parse(bodyData);
-                        var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), TreblleJsonContext.Default.Object);
-                        payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, TreblleJsonContext.Default.JsonElement);
+                        try
+                        {
+                            var doc = XDocument.Parse(bodyData);
+                            var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), TreblleJsonContext.Default.Object);
+                            payload.Data.Request.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, TreblleJsonContext.Default.JsonElement);
+                        }
+                        catch (Exception)
+                        {
+                            if (_treblleOptions.DebugMode)
+                            {
+                                _logger.LogDebug("[TREBLLE]: Skipping request body - XML contains invalid characters");
+                            }
+                        }
                     }
                     else
                     {
@@ -289,60 +300,83 @@ internal sealed class TrebllePayloadFactory
     {
         if (response is not null && httpContext.Response?.ContentType is not null)
         {
-            string? contentType = httpContext.Response?.ContentType;
-            if (contentType?.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) == true
-                || contentType?.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase) == true)
+            string contentType = httpContext.Response.ContentType;
+
+            // Align with total payload limit of 5MB
+            const long maxResponseSize = 5 * 1024 * 1024; // 5MB
+            var responseLength = httpContext.Response.ContentLength ?? response.Length;
+            
+            if (responseLength > maxResponseSize)
             {
-                // Align with total payload limit of 5MB
-                const long maxResponseSize = 5 * 1024 * 1024; // 5MB
-                var responseLength = httpContext.Response?.ContentLength ?? response.Length;
-                
-                if (responseLength > maxResponseSize)
+                payload.Data.Response.Body = new Dictionary<string, object?>
                 {
-                    payload.Data.Response.Body = new Dictionary<string, object?>
+                    ["__message"] = "Response data was larger than 5MB",
+                    ["__size"] = responseLength,
+                    ["__type"] = "large_response"
+                };
+                payload.Data.Response.Size = responseLength;
+            }
+            else if (contentType.Contains(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) == true
+                || contentType.Contains("application/problem+json", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                response.Position = 0;
+                try
+                {
+                    using var responseReader = new StreamReader(response, leaveOpen: true);
+                    var responseContent = await responseReader.ReadToEndAsync();
+
+                    if (string.IsNullOrWhiteSpace(responseContent))
                     {
-                        ["__message"] = "Response data was larger than 5MB",
-                        ["__size"] = responseLength,
-                        ["__type"] = "large_response"
-                    };
-                    payload.Data.Response.Size = responseLength;
+                        // Empty response body is valid for responses like 204 No Content
+                        payload.Data.Response.Body = null;
+                    }
+                    else if (IsValidJson(responseContent))
+                    {
+                        payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(responseContent, TreblleJsonContext.Default.JsonElement);
+                    }
+                    else
+                    {
+                        if (_treblleOptions.DebugMode)
+                        {
+                            _logger.LogDebug("Treblle Debug: Invalid JSON detected in response body");
+                        }
+                    }
+                    payload.Data.Response.Size = response.Length;
                 }
-                else
+                catch (Exception e)
                 {
-                    response.Position = 0;
-
+                    if (_treblleOptions.DebugMode)
                     {
-                        try
-                        {
-                            using var responseReader = new StreamReader(response, leaveOpen: true);
-                            var responseContent = await responseReader.ReadToEndAsync();
+                        _logger.LogDebug(e, "Treblle Debug: Error occurred while reading response content");
+                    }
 
-                            if (string.IsNullOrWhiteSpace(responseContent))
-                            {
-                                // Empty response body is valid for responses like 204 No Content
-                                payload.Data.Response.Body = null;
-                            }
-                            else if (IsValidJson(responseContent))
-                            {
-                                payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(responseContent, TreblleJsonContext.Default.JsonElement);
-                            }
-                            else
-                            {
-                                if (_treblleOptions.DebugMode)
-                                {
-                                    _logger.LogDebug("Treblle Debug: Invalid JSON detected in response body");
-                                }
-                            }
-                            payload.Data.Response.Size = response.Length;
-                        }
-                        catch (Exception e)
-                        {
-                            if (_treblleOptions.DebugMode)
-                            {
-                                _logger.LogDebug(e, "Treblle Debug: Error occurred while reading response content");
-                            }
-
-                        }
+                }
+            }
+            else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase)
+                || contentType.Contains("text/xml", StringComparison.OrdinalIgnoreCase))
+            {
+                response.Position = 0;
+                try
+                {
+                    using var responseReader = new StreamReader(response, leaveOpen: true);
+                    var responseContent = await responseReader.ReadToEndAsync();
+                    if (string.IsNullOrWhiteSpace(responseContent))
+                    {
+                        payload.Data.Response.Body = null;
+                    }
+                    else
+                    {
+                        var doc = XDocument.Parse(responseContent);
+                        var jsonText = JsonSerializer.Serialize(ConvertXDocumentToObject(doc), TreblleJsonContext.Default.Object);
+                        payload.Data.Response.Body = JsonSerializer.Deserialize<JsonElement>(jsonText, TreblleJsonContext.Default.JsonElement);
+                    }
+                    payload.Data.Response.Size = response.Length;
+                }
+                catch (Exception e)
+                {
+                    if (_treblleOptions.DebugMode)
+                    {
+                        _logger.LogDebug(e, "Treblle Debug: Error occurred while reading XML response content");
                     }
                 }
             }
@@ -537,6 +571,7 @@ internal sealed class TrebllePayloadFactory
         
         foreach (var attr in element.Attributes())
         {
+            if (attr.IsNamespaceDeclaration) continue;
             result[$"@{attr.Name.LocalName}"] = attr.Value;
         }
         
