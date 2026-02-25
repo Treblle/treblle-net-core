@@ -376,6 +376,8 @@ public IActionResult GetOrders() => Ok();
 
 The attribute is not required for standard tracking — all endpoints are monitored automatically. Use it only when you need to route specific controllers or actions to a different Treblle project.
 
+Note that app.UseTreblle() has to come after app.UseRouting() for this to work.
+
 ### Excluding endpoints or paths
 
 By default, Treblle now automatically tracks **all endpoints** without requiring manual `[Treblle]` attributes. You can exclude specific paths using the `ExcludedPaths` configuration:
