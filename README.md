@@ -357,6 +357,27 @@ var app = builder.Build();
 app.UseTreblle();
 ```
 
+### Per-Endpoint API Key Override
+
+If you need a specific controller or endpoint to report to a different Treblle project, pass an API key directly to the `[Treblle]` attribute:
+
+```csharp
+// Override for an entire controller
+[Treblle("your_per_endpoint_api_key")]
+public class OrdersController : ControllerBase
+{
+    public IActionResult GetOrders() => Ok();
+}
+
+// Or override for a single action
+[Treblle("your_per_endpoint_api_key")]
+public IActionResult GetOrders() => Ok();
+```
+
+The attribute is not required for standard tracking — all endpoints are monitored automatically. Use it only when you need to route specific controllers or actions to a different Treblle project.
+
+Note that app.UseTreblle() has to come after app.UseRouting() for this to work.
+
 ### Excluding endpoints or paths
 
 By default, Treblle now automatically tracks **all endpoints** without requiring manual `[Treblle]` attributes. You can exclude specific paths using the `ExcludedPaths` configuration:

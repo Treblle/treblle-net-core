@@ -49,14 +49,17 @@ internal sealed class TrebllePayloadFactory
         HttpContext httpContext,
         MemoryStream? response,
         long elapsedMilliseconds,
-        Exception? exception = null)
+        Exception? exception = null,
+        TreblleAttribute? treblleAttribute = null)
     {
+        string? apiKey = treblleAttribute?.ApiKey;
+
         var payload = new TrebllePayload
         {
             Sdk = "net-core",
             Version = TreblleConstants.PayloadVersion,
             // Map new properties to legacy payload field names for backward compatibility
-            ProjectId = GetEffectiveApiKey(), // ApiKey from config -> project_id in payload
+            ProjectId = apiKey ?? GetEffectiveApiKey(), // ApiKey from config -> project_id in payload
             ApiKey = GetEffectiveSdkToken(),  // SdkToken from config -> api_key in payload
         };
 
