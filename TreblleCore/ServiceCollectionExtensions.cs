@@ -162,6 +162,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
+            httpClient.DefaultRequestHeaders.Remove("x-api-key");
             httpClient.DefaultRequestHeaders.Add("x-api-key", options.SdkToken);
             httpClient.Timeout = TimeSpan.FromSeconds(10);
         })
@@ -289,6 +290,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
+            httpClient.DefaultRequestHeaders.Remove("x-api-key");
             httpClient.DefaultRequestHeaders.Add("x-api-key", options.SdkToken);
             httpClient.Timeout = TimeSpan.FromSeconds(10);
         })
