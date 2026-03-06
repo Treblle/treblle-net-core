@@ -359,24 +359,38 @@ app.UseTreblle();
 
 ### Per-Endpoint API Key Override
 
-If you need a specific controller or endpoint to report to a different Treblle project, pass an API key directly to the `[Treblle]` attribute:
+If you need a specific controller or endpoint to report to a different Treblle project, pass an API key directly to the `[Treblle]` attribute.
+
+**Option A: Hardcoded API key**
+```csharp
+[Treblle("your_per_endpoint_api_key")]
+public class OrdersController : ControllerBase { }
+```
+
+**Option B: Resolved from environment variable at startup**
+
+Useful when the key differs per environment (development, staging, production):
 
 ```csharp
-// Override for an entire controller
-[Treblle("your_per_endpoint_api_key")]
-public class OrdersController : ControllerBase
-{
-    public IActionResult GetOrders() => Ok();
-}
+[Treblle(keyEnvVarName: "ORDERS_API_KEY")]
+public class OrdersController : ControllerBase { }
 
-// Or override for a single action
-[Treblle("your_per_endpoint_api_key")]
-public IActionResult GetOrders() => Ok();
+[Treblle(keyEnvVarName: "PAYMENTS_API_KEY")]
+public class PaymentsController : ControllerBase { }
 ```
+
+Set the corresponding variables in your `.env` file or as OS environment variables:
+
+```bash
+ORDERS_API_KEY=your_orders_project_id
+PAYMENTS_API_KEY=your_payments_project_id
+```
+
+The environment variable is resolved once at application startup — there is no per-request overhead. If the variable is not set, the request falls back to the globally configured API key.
 
 The attribute is not required for standard tracking — all endpoints are monitored automatically. Use it only when you need to route specific controllers or actions to a different Treblle project.
 
-Note that app.UseTreblle() has to come after app.UseRouting() for this to work.
+Note that `app.UseTreblle()` has to come after `app.UseRouting()` for this to work.
 
 ### Excluding endpoints or paths
 
