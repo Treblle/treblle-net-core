@@ -6,8 +6,10 @@ public sealed class TreblleAttribute : Attribute
 {
     public string? ApiKey { get; set; }
 
-    public TreblleAttribute(string? apiKey = null)
+    public TreblleAttribute(string? apiKey = null, string? keyEnvVarName = null)
     {
-        ApiKey = apiKey;
+        ApiKey = keyEnvVarName != null 
+            ? Environment.GetEnvironmentVariable(keyEnvVarName)
+            : apiKey;
     }
 }
