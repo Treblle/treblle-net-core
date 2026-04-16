@@ -45,9 +45,26 @@ public static class JsonMasker
             {
                 var currentPath = string.Join(".", path.Concat(new[] { property.Key }));
 
-                if (property.Value is JsonObject || property.Value is JsonArray)
+                if (property.Value is JsonObject)
                 {
                     MaskFieldsFromJsonNode(property.Value, maskingMap, path.Concat(new[] { property.Key }).ToList(), serviceProvider, logger);
+                }
+                else if (property.Value is JsonArray childArray)
+                {
+                    if (maskingMap.Keys.Any(key => ShouldMask(key, currentPath)))
+                    {
+                        var maskerName = maskingMap.First(m => ShouldMask(m.Key, currentPath)).Value;
+                        var maskerFactory = serviceProvider.GetRequiredService<MaskerFactory>();
+                        var masker = maskerFactory.GetMasker(maskerName);
+                        for (int i = 0; i < childArray.Count; i++)
+                        {
+                            childArray[i] = JsonValue.Create(masker.Mask(childArray[i]?.ToString() ?? string.Empty));
+                        }
+                    }
+                    else
+                    {
+                        MaskFieldsFromJsonNode(property.Value, maskingMap, path.Concat(new[] { property.Key }).ToList(), serviceProvider, logger);
+                    }
                 }
                 else
                 {

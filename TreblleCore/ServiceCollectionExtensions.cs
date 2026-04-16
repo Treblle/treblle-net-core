@@ -148,7 +148,19 @@ public static class ServiceCollectionExtensions
             }
             else
             {
-                if (options.DebugMode)
+                if (options.FieldsToMaskPairedWithMaskers is not null)
+                {
+                    foreach (var kv in options.FieldsToMaskPairedWithMaskers)
+                    {
+                        maskingMap[kv.Key] = kv.Value;
+                    }
+
+                    if (options.DebugMode)
+                    {
+                        logger.LogDebug("[TREBLLE]: Using custom masking configuration with {Count} custom rules", options.FieldsToMaskPairedWithMaskers.Count);
+                    }
+                }
+                else if (options.DebugMode)
                 {
                     logger.LogDebug("[TREBLLE]: Using default sensitive words for masking");
                 }
