@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -120,7 +121,11 @@ internal sealed class TrebllePayloadFactory
             payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
             payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
             payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
-            payload.Data.Request.RoutePath = NormalizeRoutePath(httpContext.Request.Path);
+            var routeEndpoint = httpContext.GetEndpoint() as RouteEndpoint;
+            var routeTemplate = routeEndpoint?.RoutePattern?.RawText;
+            payload.Data.Request.RoutePath = routeTemplate is not null
+                ? "/" + routeTemplate
+                : NormalizeRoutePath(httpContext.Request.Path);
             payload.Data.Request.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
             payload.Data.Request.Method = httpContext.Request.Method;
 
