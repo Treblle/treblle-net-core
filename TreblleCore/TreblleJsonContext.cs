@@ -15,6 +15,7 @@ namespace Treblle.Net.Core;
 [JsonSerializable(typeof(string))] // For dictionary values
 [JsonSerializable(typeof(Dictionary<string, object>))] // For headers
 [JsonSerializable(typeof(Dictionary<string, string>))] // For form data and masking config
+[JsonSerializable(typeof(long))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
