@@ -211,12 +211,12 @@ internal sealed class TrebllePayloadFactory
 
                     foreach (var file in files)
                     {
-                        fileList.Add(new
+                        fileList.Add(new Dictionary<string, object>
                         {
-                            Name = file.FileName,
-                            ContentType = file.ContentType,
-                            Length = file.Length,
-                            FieldName = file.Name
+                            ["name"] = file.FileName,
+                            ["contentType"] = file.ContentType,
+                            ["length"] = file.Length,
+                            ["fieldName"] = file.Name
                         });
                     }
 
@@ -281,10 +281,10 @@ internal sealed class TrebllePayloadFactory
                     else
                     {
                         // Non-JSON or unknown types, store minimal info
-                        payload.Data.Request.Body = new
+                        payload.Data.Request.Body = new Dictionary<string, object>
                         {
-                            __type = "non-json",
-                            contentType
+                            ["__type"] = "non-json",
+                            ["contentType"] = contentType
                         };
                     }
                 }
