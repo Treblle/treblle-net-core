@@ -449,8 +449,6 @@ internal sealed class TrebllePayloadFactory
         }
 
         payload.Data.Errors.Add(error);
-
-        payload.Data.Response.Code = StatusCodes.Status500InternalServerError;
     }
 
 
