@@ -261,8 +261,7 @@ internal sealed class TrebllePayloadFactory
                     {
                         payload.Data.Request.Body = bodyData;
                     }
-                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase)
-                        || contentType.Contains("text/xml", StringComparison.OrdinalIgnoreCase))
+                    else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
                     {
                         try
                         {
@@ -360,8 +359,7 @@ internal sealed class TrebllePayloadFactory
 
                 }
             }
-            else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase)
-                || contentType.Contains("text/xml", StringComparison.OrdinalIgnoreCase))
+            else if (contentType.Contains("application/xml", StringComparison.OrdinalIgnoreCase))
             {
                 response.Position = 0;
                 try
