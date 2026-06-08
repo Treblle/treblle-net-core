@@ -15,7 +15,6 @@ internal static class ApiRequestFilter
         "application/xml",
         "application/x-www-form-urlencoded",
         "text/plain",
-        "text/xml",
         "application/vnd.api+json",
         "application/ld+json",
         "application/hal+json",
@@ -23,13 +22,14 @@ internal static class ApiRequestFilter
     };
 
     /// <summary>
-    /// Content types that should NOT be tracked (static resources)
+    /// Content types that should NOT be tracked (static resources and unsupported formats)
     /// </summary>
     private static readonly string[] ExcludedContentTypes = new[]
     {
         "text/html",
-        "text/css", 
+        "text/css",
         "text/javascript",
+        "text/xml",
         "application/javascript",
         "application/x-javascript",
         "image/",
@@ -72,20 +72,40 @@ internal static class ApiRequestFilter
     public static bool ShouldTrackRequest(HttpContext context, string[]? userExcludedPaths)
     {
         var path = context.Request.Path.Value ?? "/";
-        
+
         // First check user-configured excluded paths
         if (PathMatcher.ShouldExcludePath(path, userExcludedPaths))
         {
             return false;
         }
-        
+
         // Check default excluded paths (static resources)
         if (PathMatcher.ShouldExcludePath(path, DefaultExcludedPaths))
         {
             return false;
         }
-        
+
+        // SOAP is not supported - skip silently
+        if (IsSoapRequest(context))
+        {
+            return false;
+        }
+
         return true;
+    }
+
+    private static bool IsSoapRequest(HttpContext context)
+    {
+        // SOAP 1.1 uses a SOAPAction header
+        if (context.Request.Headers.ContainsKey("SOAPAction"))
+            return true;
+
+        // SOAP 1.2 uses Content-Type: application/soap+xml
+        var contentType = context.Request.ContentType;
+        if (contentType != null && contentType.Contains("application/soap+xml", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
 
     /// <summary>
