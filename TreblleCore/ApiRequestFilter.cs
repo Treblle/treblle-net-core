@@ -100,9 +100,21 @@ internal static class ApiRequestFilter
         if (context.Request.Headers.ContainsKey("SOAPAction"))
             return true;
 
-        // SOAP 1.2 uses Content-Type: application/soap+xml
+        // WSDL fetches are GET requests with ?wsdl — no Content-Type to check
+        if (context.Request.Method == HttpMethods.Get &&
+            context.Request.Query.ContainsKey("wsdl"))
+            return true;
+
         var contentType = context.Request.ContentType;
-        if (contentType != null && contentType.Contains("application/soap+xml", StringComparison.OrdinalIgnoreCase))
+        if (contentType == null)
+            return false;
+
+        // SOAP 1.2 uses Content-Type: application/soap+xml
+        if (contentType.Contains("application/soap+xml", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // SOAP 1.1 uses Content-Type: text/xml
+        if (contentType.Contains("text/xml", StringComparison.OrdinalIgnoreCase))
             return true;
 
         return false;
