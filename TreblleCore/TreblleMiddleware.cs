@@ -202,6 +202,8 @@ internal class TreblleMiddleware : IDisposable
 
         try
         {
+            TreblleQueryCollector.Initialize();
+
             httpContext.Request.EnableBuffering();
 
             // Check if we should capture response based on expected size

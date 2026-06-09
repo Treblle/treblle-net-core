@@ -99,6 +99,8 @@ namespace Treblle.Net.Core
         public Response Response { get; set; } = new();
         [JsonPropertyName("errors")]
         public List<Error> Errors { get; set; } = new();
+        [JsonPropertyName("queries")]
+        public List<QueryEntry> Queries { get; set; } = new();
     }
 
     public class TrebllePayload
