@@ -74,6 +74,8 @@ internal sealed class TrebllePayloadFactory
 
         TryAddError(exception, payload);
 
+        payload.Data.Queries = TreblleQueryCollector.GetQueries().ToList();
+
         return payload;
     }
 

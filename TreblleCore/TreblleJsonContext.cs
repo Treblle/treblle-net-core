@@ -9,6 +9,8 @@ namespace Treblle.Net.Core;
 /// Provides compile-time serialization code generation for better performance.
 /// </summary>
 [JsonSerializable(typeof(TrebllePayload))]
+[JsonSerializable(typeof(QueryEntry))]
+[JsonSerializable(typeof(List<QueryEntry>))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(object))] // For dynamic request/response bodies
 [JsonSerializable(typeof(List<object>))] 

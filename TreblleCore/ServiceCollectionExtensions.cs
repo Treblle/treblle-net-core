@@ -196,6 +196,8 @@ public static class ServiceCollectionExtensions
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
 
+        services.AddHostedService<TreblleDiagnosticHostedService>();
+
         return services;
     }
 
@@ -323,6 +325,8 @@ public static class ServiceCollectionExtensions
 
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
+
+        services.AddHostedService<TreblleDiagnosticHostedService>();
 
         return services;
     }

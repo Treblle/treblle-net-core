@@ -553,6 +553,41 @@ app.UseTreblle();
 
 **Performance Impact:** Disabling masking can reduce memory usage by up to 70% for large payloads, as it skips JSON parsing, object tree creation, and field processing operations. This is particularly beneficial for APIs handling large response bodies or high request volumes.
 
+## SQL Query Capture
+
+The SDK automatically captures SQL queries executed during each API request and includes them in the telemetry payload sent to Treblle. This works out of the box with no configuration required.
+
+### How It Works
+
+Treblle listens to [EF Core's diagnostic events](https://learn.microsoft.com/en-us/ef/core/logging-events-diagnostics/diagnostic-listeners) at the application level. When EF Core executes a database command, the SDK captures the SQL and execution time and associates them with the current HTTP request.
+
+### What Gets Captured
+
+Each query entry in the `data.queries` array contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sql` | string | The SQL query with `?` placeholders — parameter values are **not** captured |
+| `time` | number | Execution time in milliseconds |
+
+**Example payload:**
+```json
+{
+  "data": {
+    "queries": [
+      {
+        "sql": "SELECT * FROM \"users\" WHERE \"id\" = ?",
+        "time": 3.42
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM \"orders\" WHERE \"user_id\" = ?",
+        "time": 1.87
+      }
+    ]
+  }
+}
+```
+
 ## Disabling the Exception Handler
 
 By default, Treblle captures and reports exceptions that occur during request processing. If you need to disable this behavior, you can configure it when registering the middleware:
