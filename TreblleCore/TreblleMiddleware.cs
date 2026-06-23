@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
@@ -200,6 +201,14 @@ internal class TreblleMiddleware : IDisposable
         bool shouldCaptureResponse = true;
         Exception? capturedException = null;
 
+        // Capture route template before _next — UseExceptionHandler (registered after UseTreblle)
+        // calls context.SetEndpoint(null) when handling errors, so GetEndpoint() returns null by the time
+        // the finally block runs.
+        var routeEndpoint = httpContext.GetEndpoint() as RouteEndpoint;
+        var capturedRoutePath = routeEndpoint?.RoutePattern?.RawText is not null
+            ? "/" + routeEndpoint.RoutePattern.RawText
+            : null;
+
         try
         {
             TreblleQueryCollector.Initialize();
@@ -271,7 +280,8 @@ internal class TreblleMiddleware : IDisposable
                         capturedException != null ? null : memoryStream,
                         elapsedMiliseconds,
                         exception: exception,
-                        treblleAttribute: treblleAttribute);
+                        treblleAttribute: treblleAttribute,
+                        capturedRoutePath: capturedRoutePath);
 
                     _channel.Writer.TryWrite(payload);
 

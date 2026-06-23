@@ -51,7 +51,8 @@ internal sealed class TrebllePayloadFactory
         MemoryStream? response,
         long elapsedMilliseconds,
         Exception? exception = null,
-        TreblleAttribute? treblleAttribute = null)
+        TreblleAttribute? treblleAttribute = null,
+        string? capturedRoutePath = null)
     {
         string? apiKey = treblleAttribute?.ApiKey;
 
@@ -68,7 +69,7 @@ internal sealed class TrebllePayloadFactory
 
         AddServer(httpContext, payload);
 
-        await AddRequest(httpContext, payload);
+        await AddRequest(httpContext, payload, capturedRoutePath);
 
         await TryAddResponse(httpContext, response, elapsedMilliseconds, payload);
 
@@ -114,7 +115,7 @@ internal sealed class TrebllePayloadFactory
         payload.Data.Server.Os.Architecture = CachedArchitecture;
     }
 
-    private async Task AddRequest(HttpContext httpContext, TrebllePayload payload)
+    private async Task AddRequest(HttpContext httpContext, TrebllePayload payload, string? capturedRoutePath = null)
     {
         try
         {
@@ -123,11 +124,22 @@ internal sealed class TrebllePayloadFactory
             payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
             payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
             payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
-            var routeEndpoint = httpContext.GetEndpoint() as RouteEndpoint;
-            var routeTemplate = routeEndpoint?.RoutePattern?.RawText;
-            payload.Data.Request.RoutePath = routeTemplate is not null
-                ? "/" + routeTemplate
-                : NormalizeRoutePath(httpContext.Request.Path);
+            // Prefer the route template captured before _next. UseExceptionHandler (when registered after
+            // UseTreblle) calls SetEndpoint(null) when handling errors, so GetEndpoint() is unreliable here.
+            // Fall back to GetEndpoint() for apps that register UseTreblle before UseRouting — endpoint is
+            // null before _next in that setup but is resolved by the time we reach this point for 2xx responses.
+            if (capturedRoutePath is not null)
+            {
+                payload.Data.Request.RoutePath = capturedRoutePath;
+            }
+            else
+            {
+                var routeEndpoint = httpContext.GetEndpoint() as RouteEndpoint;
+                var routeTemplate = routeEndpoint?.RoutePattern?.RawText;
+                payload.Data.Request.RoutePath = routeTemplate is not null
+                    ? "/" + routeTemplate
+                    : NormalizeRoutePath(httpContext.Request.Path);
+            }
             payload.Data.Request.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
             payload.Data.Request.Method = httpContext.Request.Method;
 
