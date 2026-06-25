@@ -76,7 +76,7 @@ app.UseTreblle();
 > **💡 Where to place this code:**
 > - **Program.cs** (new minimal hosting model): Add `builder.Services.AddTreblle()` before `builder.Build()` and `app.UseTreblle()` after `var app = builder.Build()`
 > - **Startup.cs** (legacy): Add `services.AddTreblle()` in `ConfigureServices()` and `app.UseTreblle()` in `Configure()`
-> - **Web API templates**: Place after authentication/authorization middleware but before routing
+> - **⚠️ Required:** `app.UseTreblle()` must come **after** `app.UseRouting()`. Placing it before routing means error responses (4xx/5xx) will not be grouped under the correct endpoint on the Treblle dashboard.
 
 **Using .env Files with DotNetEnv**
 
@@ -222,8 +222,8 @@ public class Startup
 
     public void Configure(IApplicationBuilder app)
     {
-        app.UseTreblle();
         app.UseRouting();
+        app.UseTreblle();
         app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
     }
 }
@@ -389,8 +389,6 @@ PAYMENTS_API_KEY=your_payments_project_id
 The environment variable is resolved once at application startup — there is no per-request overhead. If the variable is not set, the request falls back to the globally configured API key.
 
 The attribute is not required for standard tracking — all endpoints are monitored automatically. Use it only when you need to route specific controllers or actions to a different Treblle project.
-
-Note that `app.UseTreblle()` has to come after `app.UseRouting()` for this to work.
 
 ### Excluding endpoints or paths
 
