@@ -307,7 +307,8 @@ internal sealed class TrebllePayloadFactory
                     httpContext.Request.Body.Position = 0;
                 }
             }
-            else if (httpContext.Request.Query.Count > 0)
+
+            if (payload.Data.Request.Body == null && httpContext.Request.Query.Count > 0)
             {
                 payload.Data.Request.Body = ParseQueryToDictionary(httpContext.Request.Query);
             }
