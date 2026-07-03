@@ -25,7 +25,8 @@ internal class MaskerFactory
             { nameof(CreditCardMasker), typeof(CreditCardMasker) },
             { nameof(SocialSecurityMasker), typeof(SocialSecurityMasker) },
             { nameof(DateMasker), typeof(DateMasker) },
-            { nameof(PostalCodeMasker), typeof(PostalCodeMasker) }
+            { nameof(PostalCodeMasker), typeof(PostalCodeMasker) },
+            { nameof(AuthorizationMasker), typeof(AuthorizationMasker) }
         };
     }
 
