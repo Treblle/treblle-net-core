@@ -307,6 +307,10 @@ internal sealed class TrebllePayloadFactory
                     httpContext.Request.Body.Position = 0;
                 }
             }
+            else if (httpContext.Request.Query.Count > 0)
+            {
+                payload.Data.Request.Body = ParseQueryToDictionary(httpContext.Request.Query);
+            }
         }
         catch (Exception ex)
         {
@@ -315,6 +319,40 @@ internal sealed class TrebllePayloadFactory
                 "An error occurred while attempting to read request body. --- Exception message: {Message}",
                 ex.Message);
         }
+    }
+
+    // Parses IQueryCollection into a nested dictionary, expanding bracket notation.
+    // "filter[time_period]=all&limit=50" → {"filter": {"time_period": "all"}, "limit": "50"}
+    private static Dictionary<string, object> ParseQueryToDictionary(IQueryCollection query)
+    {
+        var result = new Dictionary<string, object>();
+
+        foreach (var param in query)
+        {
+            var key   = param.Key;
+            var value = param.Value.ToString();
+
+            var bracketStart = key.IndexOf('[');
+            if (bracketStart > 0 && key.EndsWith(']'))
+            {
+                var outerKey = key[..bracketStart];
+                var innerKey = key[(bracketStart + 1)..^1];
+
+                if (!result.TryGetValue(outerKey, out var existing) || existing is not Dictionary<string, object> nested)
+                {
+                    nested = new Dictionary<string, object>();
+                    result[outerKey] = nested;
+                }
+
+                ((Dictionary<string, object>)result[outerKey])[innerKey] = value;
+            }
+            else
+            {
+                result[key] = value;
+            }
+        }
+
+        return result;
     }
 
     private async Task TryAddResponse(HttpContext httpContext, MemoryStream? response, long elapsedMilliseconds, TrebllePayload payload)
