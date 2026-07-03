@@ -34,7 +34,9 @@ public static class ServiceCollectionExtensions
         { "user.dob", "DateMasker" },
         { "user.password","DefaultStringMasker" },
         { "user.ss", "SocialSecurityMasker" },
-        { "user.payments.cc", "CreditCardMasker" }
+        { "user.payments.cc", "CreditCardMasker" },
+        { "authorization", "AuthorizationMasker" },
+        { "x-api-key", "AuthorizationMasker" }
     };
    
     /// <summary>
@@ -192,6 +194,7 @@ public static class ServiceCollectionExtensions
         services.TryAddTransient<SocialSecurityMasker>();
         services.TryAddTransient<DateMasker>();
         services.TryAddTransient<PostalCodeMasker>();
+        services.TryAddTransient<AuthorizationMasker>();
 
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
@@ -322,6 +325,7 @@ public static class ServiceCollectionExtensions
         services.TryAddTransient<SocialSecurityMasker>();
         services.TryAddTransient<DateMasker>();
         services.TryAddTransient<PostalCodeMasker>();
+        services.TryAddTransient<AuthorizationMasker>();
 
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
