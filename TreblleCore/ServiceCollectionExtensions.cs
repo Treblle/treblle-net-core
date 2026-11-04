@@ -199,6 +199,13 @@ public static class ServiceCollectionExtensions
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
 
+        // One metadata collector per request. The concrete type is registered as well as the
+        // interface, and the interface forwards to it, so TrebllePayloadFactory reads back
+        // the very instance callers wrote to.
+        services.TryAddScoped<TreblleMetadataCollector>();
+        services.TryAddScoped<ITreblleMetadata>(serviceProvider =>
+            serviceProvider.GetRequiredService<TreblleMetadataCollector>());
+
         services.AddHostedService<TreblleDiagnosticHostedService>();
 
         return services;
@@ -329,6 +336,13 @@ public static class ServiceCollectionExtensions
 
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
+
+        // One metadata collector per request. The concrete type is registered as well as the
+        // interface, and the interface forwards to it, so TrebllePayloadFactory reads back
+        // the very instance callers wrote to.
+        services.TryAddScoped<TreblleMetadataCollector>();
+        services.TryAddScoped<ITreblleMetadata>(serviceProvider =>
+            serviceProvider.GetRequiredService<TreblleMetadataCollector>());
 
         services.AddHostedService<TreblleDiagnosticHostedService>();
 

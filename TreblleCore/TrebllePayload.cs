@@ -101,6 +101,8 @@ namespace Treblle.Net.Core
         public List<Error> Errors { get; set; } = new();
         [JsonPropertyName("queries")]
         public List<QueryEntry> Queries { get; set; } = new();
+        [JsonPropertyName("metadata")]
+        public Dictionary<string, object?> Metadata { get; set; } = new();
     }
 
     public class TrebllePayload

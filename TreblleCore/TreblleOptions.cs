@@ -44,4 +44,12 @@ public sealed class TreblleOptions
     /// Can also be set via TREBLLE_CUSTOM_INGRESS_ENDPOINT environment variable.
     /// </summary>
     public string? CustomIngressEndpoint { get; set; }
+
+    /// <summary>
+    /// Static metadata added to every payload, such as deployment region or build version.
+    /// Per-request values set through <see cref="ITreblleMetadata"/> are merged over these,
+    /// so on a key collision the per-request value wins.
+    /// Not bound from configuration — set it in the AddTreblle options delegate.
+    /// </summary>
+    public Dictionary<string, object?>? Metadata { get; set; }
 }

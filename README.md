@@ -1,10 +1,10 @@
-# Treblle - API Intelligence Platform
+# Treblle - Enterprise Runtime Intelligence Platform
 
 [![Treblle API Intelligence](https://github.com/user-attachments/assets/b268ae9e-7c8a-4ade-95da-b4ac6fce6eea)](https://treblle.com)
 
 [Website](http://treblle.com/) • [Documentation](https://docs.treblle.com/) • [Pricing](https://treblle.com/pricing)
 
-Treblle is an API intelligence platfom that helps developers, teams and organizations understand their APIs from a single integration point.
+Discover and secure your APIs and Agents across any cloud, gateway, or technology.
 
 ---
 
@@ -244,6 +244,7 @@ Treblle offers several configuration options:
 | `DebugMode` | `false` | Enable detailed logging for troubleshooting |
 | `DisableMasking` | `false` | Disable data masking if not needed |
 | `CustomIngressEndpoint` | `null` | Custom endpoint URL for sending telemetry data |
+| `Metadata` | `null` | Static key/value data added to every payload — see [Custom Metadata](#custom-metadata) |
 
 **Example with all options:**
 ```csharp
@@ -584,6 +585,103 @@ Each query entry in the `data.queries` array contains:
     ]
   }
 }
+```
+
+## Custom Metadata
+
+Every payload carries a `metadata` object. It is empty by default, and you fill it with whatever context makes your API easier to reason about on the dashboard — tenant IDs, plan tiers, feature flags, build versions, trace IDs.
+
+There are two ways to set it, and they combine.
+
+### 1. Static metadata (every request)
+
+Set it once when you register the SDK:
+
+```csharp
+using Treblle.Net.Core;
+
+builder.Services.AddTreblle(sdkToken, apiKey, options =>
+{
+    options.Metadata = new Dictionary<string, object?>
+    {
+        ["environment"] = builder.Environment.EnvironmentName,
+        ["region"]      = "eu-central-1",
+        ["version"]     = "2.4.1",
+    };
+});
+```
+
+> `Metadata` is not bound from `appsettings.json` — set it in the options delegate, reading from configuration or environment variables if you need to.
+
+### 2. Per-request metadata
+
+Inject `ITreblleMetadata` anywhere inside a request and call `Meta`. It is registered as a scoped service, so each request gets its own isolated instance.
+
+**In a controller:**
+
+```csharp
+using Treblle.Net.Core;
+
+[ApiController]
+[Route("orders")]
+public sealed class OrdersController : ControllerBase
+{
+    private readonly ITreblleMetadata _treblle;
+
+    public OrdersController(ITreblleMetadata treblle) => _treblle = treblle;
+
+    [HttpPost]
+    public IActionResult Store()
+    {
+        _treblle.Meta("tenant_id", User.FindFirst("tenant")?.Value);
+
+        _treblle.Meta(new Dictionary<string, object?>
+        {
+            ["plan"]         = "enterprise",
+            ["order_source"] = "api",
+        });
+
+        return Ok();
+    }
+}
+```
+
+**In a minimal API handler:**
+
+```csharp
+app.MapPost("/orders", (ITreblleMetadata treblle, CreateOrder order) =>
+{
+    treblle.Meta("order_source", "api");
+    return Results.Ok();
+}).UseTreblle();
+```
+
+**In a service class** — no `HttpContext` needed, just the dependency:
+
+```csharp
+public sealed class PaymentService
+{
+    private readonly ITreblleMetadata _treblle;
+
+    public PaymentService(ITreblleMetadata treblle) => _treblle = treblle;
+
+    public async Task ChargeAsync(ChargeRequest request)
+    {
+        _treblle.Meta("payment_gateway", "stripe");
+        // ...
+    }
+}
+```
+
+**In middleware**, to cover every route it runs on:
+
+```csharp
+app.Use(async (context, next) =>
+{
+    var treblle = context.RequestServices.GetRequiredService<ITreblleMetadata>();
+    treblle.Meta("trace_id", context.Request.Headers["X-Trace-Id"].ToString());
+    await next();
+});
 ```
 
 ## Disabling the Exception Handler
