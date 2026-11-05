@@ -1,64 +1,65 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Treblle.Net.Core.Masking;
 
 namespace Treblle.Net.Core;
 
 internal sealed class TreblleService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false, // Smaller payloads
-        PropertyNameCaseInsensitive = false, // Better performance
-        NumberHandling = JsonNumberHandling.AllowReadingFromString,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping // Faster encoding
-    };
+    /// <summary>
+    /// The single default ingress host.
+    /// </summary>
+    /// <remarks>
+    /// Previously one of three hostnames was picked at random per payload. Those names all
+    /// resolve to the same load balancer, so rotating per payload bought no balancing: it
+    /// fragmented the connection pool across three hosts and forced fresh TLS handshakes.
+    /// Set <see cref="TreblleOptions.CustomIngressEndpoint"/> (or
+    /// TREBLLE_CUSTOM_INGRESS_ENDPOINT) to send elsewhere, for example
+    /// https://ingress-eu.treblle.com.
+    /// </remarks>
+    private const string DefaultIngressEndpoint = "https://ingress.treblle.com";
 
-    private static readonly string[] TreblleEndpoints = new[]
-    {
-        "https://rocknrolla.treblle.com",
-        "https://punisher.treblle.com", 
-        "https://sicario.treblle.com"
-    };
+    private const int MaxPayloadSizeBytes = 5 * 1024 * 1024;
 
-    private static readonly Random Random = new();
+    /// <summary>Below this, gzip costs more than it saves.</summary>
+    private const int MinimumCompressionSizeBytes = 1024;
 
-    private readonly Dictionary<string, string> _maskingMap;
+    private readonly MaskingRules _maskingRules;
+    private readonly MaskerFactory _maskerFactory;
     private readonly HttpClient _httpClient;
     private readonly ILogger<TreblleService> _logger;
-    private readonly IServiceProvider _serviceProvider;
     private readonly bool _disableMasking;
     private readonly bool _debugMode;
-    private readonly string? _customIngressEndpoint;
+    private readonly string _endpoint;
     private readonly ThrottleState _throttleState = new();
 
     public TreblleService(
         IHttpClientFactory httpClientFactory,
-        Dictionary<string, string> maskingMap,
+        MaskingRules maskingRules,
+        MaskerFactory maskerFactory,
         ILogger<TreblleService> logger,
-        IServiceProvider serviceProvider,
         bool disableMasking = false,
         bool debugMode = false,
         string? customIngressEndpoint = null)
     {
         _httpClient = httpClientFactory.CreateClient("Treblle");
         _logger = logger;
-        _maskingMap = maskingMap;
-        _serviceProvider = serviceProvider;
+        _maskingRules = maskingRules;
+        _maskerFactory = maskerFactory;
         _disableMasking = disableMasking;
         _debugMode = debugMode;
-        _customIngressEndpoint = customIngressEndpoint;
+        _endpoint = string.IsNullOrWhiteSpace(customIngressEndpoint)
+            ? DefaultIngressEndpoint
+            : customIngressEndpoint!;
     }
 
     /// <summary>
@@ -66,81 +67,49 @@ internal sealed class TreblleService
     /// </summary>
     public bool ShouldThrottle() => _throttleState.ShouldThrottle();
 
-    public async Task<HttpResponseMessage?> SendPayloadAsync(TrebllePayload payload)
+    public async Task SendPayloadAsync(TrebllePayload payload)
     {
         try
         {
             var jsonPayload = JsonSerializer.Serialize(payload, TreblleJsonContext.Default.TrebllePayload);
 
-            // Check if payload exceeds 5MB limit
-            const int maxPayloadSizeBytes = 5 * 1024 * 1024; // 5MB
-            if (Encoding.UTF8.GetByteCount(jsonPayload) > maxPayloadSizeBytes)
+            if (Encoding.UTF8.GetByteCount(jsonPayload) > MaxPayloadSizeBytes)
             {
                 if (_debugMode)
                 {
                     _logger.LogDebug("[TREBLLE]: Request payload size exceeds 5MB limit, replacing with size notification");
                 }
-                
-                // Create a new payload with the large request body replaced
-                var reducedPayload = new TrebllePayload
+
+                // Replaced in place. Rebuilding the payload by hand-copying every property of
+                // Request silently dropped any field added to it later.
+                //
+                // Dictionary, not an anonymous type: anonymous types are not declared in
+                // TreblleJsonContext, and the source-generated serializer throws on any
+                // runtime type it has no metadata for.
+                payload.Data.Request.Body = new Dictionary<string, object>
                 {
-                    ApiKey = payload.ApiKey,
-                    ProjectId = payload.ProjectId,
-                    Version = payload.Version,
-                    Sdk = payload.Sdk,
-                    Data = new Data
-                    {
-                        Server = payload.Data.Server,
-                        Language = payload.Data.Language,
-                        Request = new Request
-                        {
-                            Timestamp = payload.Data.Request.Timestamp,
-                            Ip = payload.Data.Request.Ip,
-                            Url = payload.Data.Request.Url,
-                            RoutePath = payload.Data.Request.RoutePath,
-                            Query = payload.Data.Request.Query,
-                            UserAgent = payload.Data.Request.UserAgent,
-                            Method = payload.Data.Request.Method,
-                            Headers = payload.Data.Request.Headers,
-                            // Dictionary, not an anonymous type: anonymous types are not
-                            // declared in TreblleJsonContext, and the source-generated
-                            // serializer throws on any runtime type it has no metadata for.
-                            Body = new Dictionary<string, object>
-                            {
-                                ["__message"] = "Request data payload was bigger than 5MB"
-                            }
-                        },
-                        Response = payload.Data.Response,
-                        Errors = payload.Data.Errors,
-                        Queries = payload.Data.Queries,
-                        Metadata = payload.Data.Metadata
-                    }
+                    ["__message"] = "Request data payload was bigger than 5MB"
                 };
-                
-                jsonPayload = JsonSerializer.Serialize(reducedPayload, TreblleJsonContext.Default.TrebllePayload);
+
+                jsonPayload = JsonSerializer.Serialize(payload, TreblleJsonContext.Default.TrebllePayload);
             }
 
-            var finalJsonPayload = _disableMasking 
-                ? jsonPayload 
-                : jsonPayload.Mask(_maskingMap, _serviceProvider, _logger);
+            var finalJsonPayload = _disableMasking
+                ? jsonPayload
+                : jsonPayload.Mask(_maskingRules, _maskerFactory);
 
-            var endpoint = !string.IsNullOrWhiteSpace(_customIngressEndpoint)
-                ? _customIngressEndpoint
-                : TreblleEndpoints[Random.Next(TreblleEndpoints.Length)];
-            
             var jsonBytes = Encoding.UTF8.GetBytes(finalJsonPayload ?? string.Empty);
-            var compressedBytes = CompressData(jsonBytes);
-            
-            using HttpContent content = new ByteArrayContent(compressedBytes);
-            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
-            
-            // Only add gzip header if we actually compressed the data
-            if (compressedBytes.Length < jsonBytes.Length)
+            var compressed = TryCompress(jsonBytes, out var bodyBytes);
+
+            using HttpContent content = new ByteArrayContent(bodyBytes);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+            if (compressed)
             {
                 content.Headers.ContentEncoding.Add("gzip");
             }
-            
-            using var httpResponseMessage = await _httpClient.PostAsync(endpoint, content);
+
+            using var httpResponseMessage = await _httpClient.PostAsync(_endpoint, content);
 
             if (httpResponseMessage.StatusCode == HttpStatusCode.TooManyRequests)
             {
@@ -153,15 +122,13 @@ internal sealed class TreblleService
                         retryAfter ?? 0);
                 }
 
-                return httpResponseMessage;
+                return;
             }
 
             if (httpResponseMessage.IsSuccessStatusCode)
             {
                 _throttleState.RecordSuccess();
             }
-
-            return httpResponseMessage;
         }
         catch (Exception ex)
         {
@@ -169,8 +136,6 @@ internal sealed class TreblleService
                 ex,
                 "An error occurred while sending data to Treblle. --- Exception message: {Message}",
                 ex.Message);
-
-            return null;
         }
     }
 
@@ -189,18 +154,32 @@ internal sealed class TreblleService
         return null;
     }
 
-    private static byte[] CompressData(byte[] data)
+    /// <summary>
+    /// Gzips <paramref name="data"/> when it is large enough to be worth it. Returns true only
+    /// when <paramref name="result"/> actually holds compressed bytes, which is the only case
+    /// that may set Content-Encoding.
+    /// </summary>
+    /// <remarks>
+    /// The header used to be decided by comparing lengths, so an incompressible payload that
+    /// gzip made marginally larger was sent compressed but unmarked — the ingress received
+    /// bytes it could not parse.
+    /// </remarks>
+    private static bool TryCompress(byte[] data, out byte[] result)
     {
-        // Skip compression for small payloads - not worth the overhead
-        if (data.Length < 1024)
-            return data;
-            
+        if (data.Length < MinimumCompressionSizeBytes)
+        {
+            result = data;
+            return false;
+        }
+
         // Pre-size output stream to avoid buffer reallocations during compression
         using var output = new MemoryStream(data.Length / 3);
         using (var gzipStream = new GZipStream(output, CompressionLevel.Fastest))
         {
             gzipStream.Write(data, 0, data.Length);
         }
-        return output.ToArray();
+
+        result = output.ToArray();
+        return true;
     }
 }

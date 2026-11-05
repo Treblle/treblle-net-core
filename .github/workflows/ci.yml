@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - v2
+
+permissions:
+  contents: read
+
+# A new push to a PR makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          # The library targets net6.0 and the test project net10.0; the 10.0 SDK builds both,
+          # pulling the net6.0 targeting pack down as part of restore.
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Treblle.Net.Core.sln
+
+      - name: Build
+        run: dotnet build Treblle.Net.Core.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Treblle.Net.Core.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+
+      # The release workflow packs on a tag, by which point a packaging break is already
+      # tagged. Catching it here costs seconds.
+      - name: Pack (smoke check)
+        run: dotnet pack TreblleCore/Treblle.Net.Core.csproj --configuration Release --no-build -o ./nupkg
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./test-results
+          if-no-files-found: ignore

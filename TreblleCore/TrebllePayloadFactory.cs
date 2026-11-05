@@ -8,6 +8,7 @@ using System.Text.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Mime;
@@ -51,9 +52,11 @@ internal sealed class TrebllePayloadFactory
         {
             Sdk = "net-core",
             Version = TreblleConstants.PayloadVersion,
-            // Map new properties to legacy payload field names for backward compatibility
-            ProjectId = apiKey ?? GetEffectiveApiKey(), // ApiKey from config -> project_id in payload
-            ApiKey = GetEffectiveSdkToken(),  // SdkToken from config -> api_key in payload
+            // Payload fields mirror the configuration options: the SDK Token travels as
+            // sdk_token and the API Key as api_key. The x-api-key request header carries the
+            // SDK Token and is unaffected by this mapping.
+            ApiKey = apiKey ?? GetEffectiveApiKey(),
+            SdkToken = GetEffectiveSdkToken(),
         };
 
         AddLanguage(payload);
@@ -70,7 +73,25 @@ internal sealed class TrebllePayloadFactory
 
         AddMetadata(httpContext, payload);
 
+        payload.EstimatedSizeBytes = EstimateSizeBytes(httpContext, payload);
+
         return payload;
+    }
+
+    /// <summary>
+    /// A cheap approximation of the payload's serialized size, for the sender's queue budget.
+    /// The two bodies dominate; everything else is bounded by the schema and the header count.
+    /// </summary>
+    private static long EstimateSizeBytes(HttpContext httpContext, TrebllePayload payload)
+    {
+        const long fixedOverheadBytes = 2048;
+
+        var requestBytes = httpContext.Request.ContentLength ?? 0;
+        var responseBytes = payload.Data.Response.Size;
+
+        return fixedOverheadBytes
+            + (requestBytes > 0 ? requestBytes : 0)
+            + (responseBytes > 0 ? responseBytes : 0);
     }
 
     /// <summary>
@@ -96,10 +117,7 @@ internal sealed class TrebllePayloadFactory
             {
                 foreach (var entry in staticMetadata)
                 {
-                    if (!string.IsNullOrWhiteSpace(entry.Key))
-                    {
-                        metadata[entry.Key] = TreblleMetadataNormalizer.Normalize(entry.Value);
-                    }
+                    TreblleMetadataNormalizer.Write(metadata, entry.Key, entry.Value);
                 }
             }
 
@@ -152,9 +170,12 @@ internal sealed class TrebllePayloadFactory
     {
         try
         {
-            payload.Data.Request.Timestamp = DateTime.UtcNow.ToString("yyyy-M-d H:m:s");
-            string? serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
-            payload.Data.Request.Ip = !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
+            // InvariantCulture, and padded components. In a custom format string ':' is a
+            // placeholder for the current culture's time separator rather than a literal, and
+            // an app using UseRequestLocalization sets CurrentCulture from the caller's
+            // Accept-Language header — which let the caller influence the rendered timestamp.
+            payload.Data.Request.Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            payload.Data.Request.Ip = ResolveClientIp(httpContext);
             payload.Data.Request.Url = httpContext.Request.GetDisplayUrl();
             payload.Data.Request.Query = httpContext.Request.QueryString.ToString();
             // Prefer the route template captured before _next. UseExceptionHandler (when registered after
@@ -178,6 +199,55 @@ internal sealed class TrebllePayloadFactory
         {
             _logger.LogError(ex, "An error occurred while intercepting request. --- Exception message: {Message}", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Resolves the calling client's IP address.
+    /// </summary>
+    /// <remarks>
+    /// This used to read the REMOTE_ADDR server variable, which requires IServerVariablesFeature
+    /// — implemented by IIS and not by Kestrel. Every Linux and container deployment therefore
+    /// reported "bogon" for every request.
+    /// <para>
+    /// X-Forwarded-For is consulted first so that an app behind a proxy reports the caller
+    /// rather than the proxy without extra configuration. An app that has configured
+    /// UseForwardedHeaders still gets the right answer: that middleware consumes the header and
+    /// promotes the value onto RemoteIpAddress, so the fallback below is what applies. Note that
+    /// an unproxied app reports whatever X-Forwarded-For the caller chose to send.
+    /// </para>
+    /// </remarks>
+    private static string ResolveClientIp(HttpContext httpContext)
+    {
+        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].ToString();
+
+        if (!string.IsNullOrEmpty(forwardedFor))
+        {
+            // Comma-separated chain; the left-most entry is the original client.
+            var separator = forwardedFor.IndexOf(',');
+            var client = (separator >= 0 ? forwardedFor.Substring(0, separator) : forwardedFor).Trim();
+
+            if (client.Length > 0)
+            {
+                return client;
+            }
+        }
+
+        var remoteIpAddress = httpContext.Connection.RemoteIpAddress;
+
+        if (remoteIpAddress is not null)
+        {
+            if (remoteIpAddress.IsIPv4MappedToIPv6)
+            {
+                remoteIpAddress = remoteIpAddress.MapToIPv4();
+            }
+
+            return remoteIpAddress.ToString();
+        }
+
+        // IIS still exposes it this way when the connection feature is unavailable.
+        var serverIpAddress = httpContext.GetServerVariable("REMOTE_ADDR");
+
+        return !string.IsNullOrEmpty(serverIpAddress) ? serverIpAddress : "bogon";
     }
 
     private void TryAddRequestHeaders(HttpContext httpContext, TrebllePayload payload)
@@ -532,12 +602,14 @@ internal sealed class TrebllePayloadFactory
 
     private static string GetProgrammingLanguageVersion()
     {
-#if NET8_0
+#if NET9_0_OR_GREATER
+        return "13";
+#elif NET8_0_OR_GREATER
         return "12";
-#elif NET7_0
-                return "11";
+#elif NET7_0_OR_GREATER
+        return "11";
 #else
-                return "10";
+        return "10";
 #endif
     }
 

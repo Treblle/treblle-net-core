@@ -9,7 +9,27 @@ permissions:
   contents: read
 
 jobs:
+  # The push to NuGet cannot be undone, so the suite gates it even though the same tests
+  # already ran on the PR that produced this commit.
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build Treblle.Net.Core.sln --configuration Release
+
+      - name: Test
+        run: dotnet test Treblle.Net.Core.sln --configuration Release --no-build
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -21,7 +41,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Verify tag matches project version
         run: |

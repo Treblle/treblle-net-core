@@ -1,5 +1,3 @@
-﻿using System.Text.RegularExpressions;
-
 namespace Treblle.Net.Core.Masking;
 
 public class DefaultStringMasker : IStringMasker
@@ -17,6 +15,8 @@ public class DefaultStringMasker : IStringMasker
         if (string.IsNullOrEmpty(input))
             return string.Empty;
 
-        return Regex.Replace(input, ".", "*", RegexOptions.Singleline);
+        // Was Regex.Replace(input, ".", "*"), which ran one regex match per character —
+        // masking a 100 KB field cost 100k matches to produce a run of asterisks.
+        return new string('*', input.Length);
     }
 }

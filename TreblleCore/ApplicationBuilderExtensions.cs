@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Treblle.Net.Core;
 
@@ -21,9 +22,20 @@ public static class ApplicationBuilderExtensions
                         return;
                     }
 
+                    // A configuration problem disables the SDK rather than taking the host down.
+                    var options = httpContext.RequestServices.GetRequiredService<IOptions<TreblleOptions>>().Value;
+
+                    if (!options.IsEnabled)
+                    {
+                        return;
+                    }
+
                     var trebllePayloadFactory = httpContext.RequestServices.GetRequiredService<TrebllePayloadFactory>();
 
-                    var elapsedMiliseconds = (long)(httpContext.Items["elapsedMiliseconds"] ?? 0L);
+                    var elapsedMiliseconds =
+                        httpContext.Items.TryGetValue(TreblleItemKeys.ElapsedMilliseconds, out var elapsed) && elapsed is long value
+                            ? value
+                            : 0L;
 
                     var payload = await trebllePayloadFactory.CreateAsync(
                         httpContext,
@@ -31,9 +43,10 @@ public static class ApplicationBuilderExtensions
                         elapsedMiliseconds,
                         exceptionHandlerFeature.Error);
 
-                    var treblleService = httpContext.RequestServices.GetRequiredService<TreblleService>();
-
-                    await treblleService.SendPayloadAsync(payload);
+                    // Queued rather than awaited. Sending inline put a network call with a
+                    // 10 second timeout in front of every error response — worst possible
+                    // moment to add latency, since the API is already failing.
+                    httpContext.RequestServices.GetRequiredService<TreblleSender>().TryEnqueue(payload);
                 });
             });
         }

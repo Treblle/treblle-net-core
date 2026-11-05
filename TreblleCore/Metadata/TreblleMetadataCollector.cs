@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Treblle.Net.Core;
@@ -10,13 +10,13 @@ namespace Treblle.Net.Core;
 internal sealed class TreblleMetadataCollector : ITreblleMetadata
 {
     /// <summary>
-    /// Upper bound on distinct keys set during a request, mirroring
-    /// TreblleQueryCollector.MaxQueries. Once reached, new keys are dropped but existing ones
-    /// can still be updated. The cap exists to bound growth driven by request data; keys
-    /// configured once in TreblleOptions.Metadata are developer-authored and merged on top of
-    /// this budget rather than counting against it.
+    /// Upper bound on distinct keys set during a request, matching the payload schema's
+    /// maxProperties for data.metadata. Once reached, new keys are dropped but existing ones
+    /// can still be updated. The final merged object is capped again in
+    /// <see cref="TreblleMetadataNormalizer.Write"/>, since static options metadata and
+    /// per-request values share the one budget the schema allows.
     /// </summary>
-    internal const int MaxEntries = 64;
+    internal const int MaxEntries = TreblleMetadataNormalizer.MaxEntries;
 
     private readonly object _gate = new();
 
@@ -73,7 +73,7 @@ internal sealed class TreblleMetadataCollector : ITreblleMetadata
 
             foreach (var pair in _values)
             {
-                target[pair.Key] = TreblleMetadataNormalizer.Normalize(pair.Value);
+                TreblleMetadataNormalizer.Write(target, pair.Key, pair.Value);
             }
         }
     }

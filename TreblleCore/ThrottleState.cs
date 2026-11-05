@@ -19,8 +19,6 @@ internal sealed class ThrottleState
     private const double JitterFactor = 0.2;         // 20% jitter
     private const int SuccessesRequiredForRecovery = 2;
 
-    private static readonly Random JitterRandom = new();
-
     // State fields - using long for Interlocked compatibility
     private long _state = StateNormal;
     private long _backoffUntilTicks;
@@ -77,7 +75,10 @@ internal sealed class ThrottleState
         {
             // Use exponential backoff with jitter
             var currentBackoff = Interlocked.Read(ref _currentBackoffMs);
-            var jitter = 1.0 + (JitterRandom.NextDouble() * JitterFactor * 2 - JitterFactor);
+            // Random.Shared, not a shared Random instance: RecordThrottleResponse is reached
+            // from concurrent request threads, and Random's instance methods are not
+            // thread-safe — concurrent calls can corrupt its internal state.
+            var jitter = 1.0 + (Random.Shared.NextDouble() * JitterFactor * 2 - JitterFactor);
             backoffMs = (long)(currentBackoff * jitter);
 
             // Double the backoff for next time (up to max)
