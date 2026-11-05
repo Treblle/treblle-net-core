@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Authors>Treblle</Authors>
+    <!-- Local dev default only. The published version comes from the git tag:
+         .github/workflows/publish-nuget.yml packs with -p:Version=<tag minus the leading v>. -->
     <Version>2.2.0</Version>
     <PackageId>Treblle.Net.Core</PackageId>
     <Product>Treblle .NET Core</Product>
