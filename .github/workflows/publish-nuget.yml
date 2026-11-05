@@ -11,6 +11,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: read
       id-token: write # enable GitHub OIDC token issuance for trusted publishing
