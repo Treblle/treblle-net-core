@@ -6,44 +6,45 @@ using Treblle.Runtime.Masking;
 namespace Treblle.Net.Core.Masking;
 
 /// <summary>
-/// Factory for creating string masker instances. Replaces keyed services for .NET 6+ compatibility.
+/// Resolves string maskers by name. Replaces keyed services for .NET 6+ compatibility.
 /// </summary>
-internal class MaskerFactory
+/// <remarks>
+/// The maskers are resolved once here rather than on every lookup. The previous version hit
+/// the container for each masked property — and the caller hit the container again for the
+/// factory itself, once per property of every payload.
+/// </remarks>
+internal sealed class MaskerFactory
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly Dictionary<string, Type> _maskerTypes;
+    private readonly Dictionary<string, IStringMasker> _maskers;
+    private readonly IStringMasker _defaultMasker;
 
     public MaskerFactory(IServiceProvider serviceProvider)
     {
-        _serviceProvider = serviceProvider;
-        
-        // Map masker names to their types
-        _maskerTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        _defaultMasker = serviceProvider.GetRequiredService<DefaultStringMasker>();
+
+        _maskers = new Dictionary<string, IStringMasker>(StringComparer.OrdinalIgnoreCase)
         {
-            { nameof(DefaultStringMasker), typeof(DefaultStringMasker) },
-            { nameof(EmailMasker), typeof(EmailMasker) },
-            { nameof(CreditCardMasker), typeof(CreditCardMasker) },
-            { nameof(SocialSecurityMasker), typeof(SocialSecurityMasker) },
-            { nameof(DateMasker), typeof(DateMasker) },
-            { nameof(PostalCodeMasker), typeof(PostalCodeMasker) },
-            { nameof(AuthorizationMasker), typeof(AuthorizationMasker) }
+            { nameof(DefaultStringMasker), _defaultMasker },
+            { nameof(EmailMasker), serviceProvider.GetRequiredService<EmailMasker>() },
+            { nameof(CreditCardMasker), serviceProvider.GetRequiredService<CreditCardMasker>() },
+            { nameof(SocialSecurityMasker), serviceProvider.GetRequiredService<SocialSecurityMasker>() },
+            { nameof(DateMasker), serviceProvider.GetRequiredService<DateMasker>() },
+            { nameof(PostalCodeMasker), serviceProvider.GetRequiredService<PostalCodeMasker>() },
+            { nameof(AuthorizationMasker), serviceProvider.GetRequiredService<AuthorizationMasker>() }
         };
     }
 
     /// <summary>
-    /// Gets a masker instance by name, with fallback to DefaultStringMasker
+    /// Gets a masker by name, falling back to <see cref="DefaultStringMasker"/> for an unknown
+    /// or blank name.
     /// </summary>
-    public IStringMasker GetMasker(string maskerName)
+    public IStringMasker GetMasker(string? maskerName)
     {
-        if (string.IsNullOrWhiteSpace(maskerName))
-            return _serviceProvider.GetRequiredService<DefaultStringMasker>();
-
-        if (_maskerTypes.TryGetValue(maskerName, out var maskerType))
+        if (!string.IsNullOrWhiteSpace(maskerName) && _maskers.TryGetValue(maskerName!, out var masker))
         {
-            return (IStringMasker)_serviceProvider.GetRequiredService(maskerType);
+            return masker;
         }
 
-        // Fallback to default masker if unknown type
-        return _serviceProvider.GetRequiredService<DefaultStringMasker>();
+        return _defaultMasker;
     }
 }

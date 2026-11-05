@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,7 +15,15 @@ namespace Treblle.Net.Core;
 
 public static class ServiceCollectionExtensions
 {
-    private static readonly Dictionary<string, string> maskingMap = new()
+    /// <summary>
+    /// The built-in field/masker pairs.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. User overrides are merged into a fresh dictionary per registration rather
+    /// than written back here — the previous version mutated this static every time
+    /// TreblleService was resolved, while the background sender was enumerating it.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<string, string> DefaultMaskingMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         { "password", "DefaultStringMasker" },
         { "pwd", "DefaultStringMasker" },
@@ -38,7 +47,7 @@ public static class ServiceCollectionExtensions
         { "authorization", "AuthorizationMasker" },
         { "x-api-key", "AuthorizationMasker" }
     };
-   
+
     /// <summary>
     /// Adds Treblle SDK to the service collection.
     /// </summary>
@@ -99,20 +108,20 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Internal method for auto-configuration that bypasses credential validation
+    /// Auto-configuration. Credentials come from the environment or configuration, and a
+    /// missing one disables the SDK rather than throwing — see <see cref="ValidateOptions"/>.
     /// </summary>
     private static IServiceCollection AddTreblleWithAutoConfiguration(
         IServiceCollection services,
         Action<TreblleOptions>? configureOptions)
     {
-        // Configure auto-detection first, then user overrides
+        // Configure auto-detection first, then user overrides, then validation last.
         services.AddOptions<TreblleOptions>()
             .Configure<IConfiguration>((options, configuration) =>
             {
-                var (sdkToken, apiKey) = GetTreblleCredentials(configuration);
-                options.SdkToken = sdkToken;
-                options.ApiKey = apiKey;
-                options.CustomIngressEndpoint = GetCustomIngressEndpoint(configuration);
+                options.SdkToken = Resolve(configuration, "TREBLLE_SDK_TOKEN", "Treblle:SdkToken") ?? string.Empty;
+                options.ApiKey = Resolve(configuration, "TREBLLE_API_KEY", "Treblle:ApiKey") ?? string.Empty;
+                options.CustomIngressEndpoint = Resolve(configuration, "TREBLLE_CUSTOM_INGRESS_ENDPOINT", "Treblle:CustomIngressEndpoint");
             });
 
         if (configureOptions != null)
@@ -120,99 +129,17 @@ public static class ServiceCollectionExtensions
             services.PostConfigure<TreblleOptions>(configureOptions);
         }
 
-        // Validate and normalize custom ingress endpoint if provided via options action
-        services.PostConfigure<TreblleOptions>(options =>
-        {
-            if (!string.IsNullOrWhiteSpace(options.CustomIngressEndpoint))
-            {
-                options.CustomIngressEndpoint = ValidateAndNormalizeIngressEndpoint(options.CustomIngressEndpoint);
-            }
-        });
+        // Registered after the user's delegate so it sees the final values.
+        services.PostConfigure<TreblleOptions>(ValidateOptions);
 
-        // Register services without credential validation since they're handled by options
-        services.TryAddTransient<TreblleService>(serviceProvider =>
-        {
-            var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
-            var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
-            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
-
-            if (options.DebugMode)
-            {
-                logger.LogDebug("[TREBLLE]: TreblleService initialized with debug mode enabled");
-            }
-
-            if (options.DisableMasking)
-            {
-                if (options.DebugMode)
-                {
-                    logger.LogDebug("[TREBLLE]: Data masking is disabled for improved performance");
-                }
-            }
-            else
-            {
-                if (options.FieldsToMaskPairedWithMaskers is not null)
-                {
-                    foreach (var kv in options.FieldsToMaskPairedWithMaskers)
-                    {
-                        maskingMap[kv.Key] = kv.Value;
-                    }
-
-                    if (options.DebugMode)
-                    {
-                        logger.LogDebug("[TREBLLE]: Using custom masking configuration with {Count} custom rules", options.FieldsToMaskPairedWithMaskers.Count);
-                    }
-                }
-                else if (options.DebugMode)
-                {
-                    logger.LogDebug("[TREBLLE]: Using default sensitive words for masking");
-                }
-            }
-
-            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode, options.CustomIngressEndpoint);
-        });
-
-        services.TryAddSingleton<TrebllePayloadFactory>();
-
-        services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
-        {
-            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
-            httpClient.DefaultRequestHeaders.Remove("x-api-key");
-            httpClient.DefaultRequestHeaders.Add("x-api-key", options.SdkToken);
-            httpClient.Timeout = TimeSpan.FromSeconds(10);
-        })
-        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-        {
-            UseCookies = false, // Treblle API doesn't use cookies - disabling saves memory and processing
-            UseProxy = false,   // Skip proxy detection for better performance
-            EnableMultipleHttp2Connections = true // Enable HTTP/2 multiplexing for better throughput
-        });
-
-        // Register masker types individually (replacement for keyed services)
-        services.TryAddTransient<DefaultStringMasker>();
-        services.TryAddTransient<EmailMasker>();
-        services.TryAddTransient<CreditCardMasker>();
-        services.TryAddTransient<SocialSecurityMasker>();
-        services.TryAddTransient<DateMasker>();
-        services.TryAddTransient<PostalCodeMasker>();
-        services.TryAddTransient<AuthorizationMasker>();
-
-        // Register masker factory for .NET 6+ compatibility
-        services.TryAddSingleton<MaskerFactory>();
-
-        // One metadata collector per request. The concrete type is registered as well as the
-        // interface, and the interface forwards to it, so TrebllePayloadFactory reads back
-        // the very instance callers wrote to.
-        services.TryAddScoped<TreblleMetadataCollector>();
-        services.TryAddScoped<ITreblleMetadata>(serviceProvider =>
-            serviceProvider.GetRequiredService<TreblleMetadataCollector>());
-
-        services.AddHostedService<TreblleDiagnosticHostedService>();
+        AddTreblleCore(services);
 
         return services;
     }
 
     /// <summary>
-    /// Internal method with full parameter support including configuration action
+    /// Explicit configuration. Null or empty credentials are a programming error that is
+    /// detectable here, at registration time, so this overload still throws.
     /// </summary>
     private static IServiceCollection AddTreblle(
         this IServiceCollection services,
@@ -223,76 +150,16 @@ public static class ServiceCollectionExtensions
         bool debugMode,
         Action<TreblleOptions>? configureOptions = null)
     {
-        // Create a temporary logger for setup validation if debug mode is enabled
-        using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        var setupLogger = loggerFactory.CreateLogger("Treblle.Setup");
-
         if (string.IsNullOrWhiteSpace(sdkToken))
         {
-            if (debugMode)
-            {
-                setupLogger.LogDebug("[TREBLLE]: SDK Token is null or empty - this will cause authentication failures");
-            }
             throw new ArgumentException("The SDK token is required", nameof(sdkToken));
         }
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            if (debugMode)
-            {
-                setupLogger.LogDebug("[TREBLLE]: API Key is null or empty - this will cause project identification failures");
-            }
             throw new ArgumentException("The API key is required", nameof(apiKey));
         }
 
-        if (debugMode)
-        {
-            setupLogger.LogDebug("[TREBLLE]: SDK Token and API Key provided successfully");
-            setupLogger.LogDebug("[TREBLLE]: Debug mode is enabled - additional logging will be available");
-        }
-        
-        services.TryAddTransient<TreblleService>( serviceProvider =>
-        {
-            var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
-            var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
-            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
-
-            if (options.DebugMode)
-            {
-                logger.LogDebug("[TREBLLE]: TreblleService initialized with debug mode enabled");
-            }
-
-            if (options.DisableMasking)
-            {
-                if (options.DebugMode)
-                {
-                    logger.LogDebug("[TREBLLE]: Data masking is disabled for improved performance");
-                }
-            }
-            else if (FieldsToMaskPairedWithMaskers is null)
-            {
-                if (options.DebugMode)
-                {
-                    logger.LogDebug("[TREBLLE]: Using default sensitive words for masking");
-                }
-            }
-            else 
-            {
-                foreach (var kv in FieldsToMaskPairedWithMaskers)
-                {
-                    maskingMap[kv.Key] = kv.Value;
-                }
-                
-                if (options.DebugMode)
-                {
-                    logger.LogDebug("[TREBLLE]: Using custom masking configuration with {Count} custom rules", FieldsToMaskPairedWithMaskers.Count);
-                }
-            }
-
-            return new(httpClientFactory, maskingMap, logger, serviceProvider, options.DisableMasking, options.DebugMode, options.CustomIngressEndpoint);
-        });
-
-        services.TryAddSingleton<TrebllePayloadFactory>();
         services.Configure<TreblleOptions>(o =>
         {
             o.SdkToken = sdkToken;
@@ -303,13 +170,74 @@ public static class ServiceCollectionExtensions
 
             // Apply additional configuration if provided
             configureOptions?.Invoke(o);
-
-            // Validate and normalize custom ingress endpoint if provided
-            if (!string.IsNullOrWhiteSpace(o.CustomIngressEndpoint))
-            {
-                o.CustomIngressEndpoint = ValidateAndNormalizeIngressEndpoint(o.CustomIngressEndpoint);
-            }
         });
+
+        // Validation runs as a PostConfigure so it sees the result of every Configure
+        // delegate, including a CustomIngressEndpoint set by configureOptions above.
+        services.PostConfigure<TreblleOptions>(ValidateOptions);
+
+        AddTreblleCore(services);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Reads a setting from the environment, falling back to configuration.
+    /// </summary>
+    /// <remarks>
+    /// A set-but-empty environment variable must not shadow configuration. On Unix
+    /// <c>TREBLLE_SDK_TOKEN=</c> is a variable that exists with an empty value, and
+    /// <see cref="Environment.GetEnvironmentVariable(string)"/> returns an empty string rather
+    /// than null for it — so a plain <c>??</c> chain accepted it as the credential and never
+    /// consulted appsettings.json. Passing an empty -e flag to a container, or an empty key in
+    /// a ConfigMap, silently disabled the SDK on an otherwise correctly configured app.
+    /// </remarks>
+    private static string? Resolve(IConfiguration configuration, string environmentVariable, string configurationKey)
+    {
+        var value = Environment.GetEnvironmentVariable(environmentVariable);
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        value = configuration[configurationKey];
+
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    /// <summary>
+    /// Registrations shared by every entry point. Previously duplicated across the two
+    /// configuration paths, which let them drift apart.
+    /// </summary>
+    private static void AddTreblleCore(IServiceCollection services)
+    {
+        services.TryAddSingleton<TreblleService>(serviceProvider =>
+        {
+            var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+            var logger = serviceProvider.GetRequiredService<ILogger<TreblleService>>();
+            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
+
+            return new TreblleService(
+                httpClientFactory,
+                serviceProvider.GetRequiredService<MaskingRules>(),
+                serviceProvider.GetRequiredService<MaskerFactory>(),
+                logger,
+                options.DisableMasking,
+                options.DebugMode,
+                options.CustomIngressEndpoint);
+        });
+
+        // Compiled once for the lifetime of the application, and never mutated afterwards.
+        services.TryAddSingleton(serviceProvider =>
+            BuildMaskingRules(serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value.FieldsToMaskPairedWithMaskers));
+
+        services.TryAddSingleton<TrebllePayloadFactory>();
+
+        // One sender for the application, started and stopped with the host so queued payloads
+        // get a real chance to flush on shutdown.
+        services.TryAddSingleton<TreblleSender>();
+        services.AddHostedService(serviceProvider => serviceProvider.GetRequiredService<TreblleSender>());
 
         services.AddHttpClient("Treblle", (serviceProvider, httpClient) =>
         {
@@ -317,22 +245,48 @@ public static class ServiceCollectionExtensions
             httpClient.DefaultRequestHeaders.Remove("x-api-key");
             httpClient.DefaultRequestHeaders.Add("x-api-key", options.SdkToken);
             httpClient.Timeout = TimeSpan.FromSeconds(10);
-        })
-        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-        {
-            UseCookies = false, // Treblle API doesn't use cookies - disabling saves memory and processing
-            UseProxy = false,   // Skip proxy detection for better performance
-            EnableMultipleHttp2Connections = true // Enable HTTP/2 multiplexing for better throughput
-        });
 
-        // Register masker types individually (replacement for keyed services)
-        services.TryAddTransient<DefaultStringMasker>();
-        services.TryAddTransient<EmailMasker>();
-        services.TryAddTransient<CreditCardMasker>();
-        services.TryAddTransient<SocialSecurityMasker>();
-        services.TryAddTransient<DateMasker>();
-        services.TryAddTransient<PostalCodeMasker>();
-        services.TryAddTransient<AuthorizationMasker>();
+            // The ingress negotiates HTTP/2. Without setting this the request version stayed at
+            // 1.1 and EnableMultipleHttp2Connections below was a no-op. RequestVersionOrLower
+            // means ALPN falls back to 1.1 cleanly against anything that does not speak h2,
+            // including a custom ingress endpoint.
+            httpClient.DefaultRequestVersion = HttpVersion.Version20;
+            httpClient.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+        })
+        .ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<TreblleOptions>>().Value;
+
+            return new SocketsHttpHandler
+            {
+                UseCookies = false, // Treblle API doesn't use cookies - disabling saves memory and processing
+
+                // Honouring the system proxy by default: hard-coding this off lost every
+                // payload, silently, in any environment with mandatory egress proxying.
+                UseProxy = options.UseSystemProxy,
+
+                // Recycling connections on a timer is what picks up DNS changes as the
+                // ingress load balancer's addresses rotate. It replaces handler rotation
+                // (disabled below), which threw away the warm pool every two minutes.
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                MaxConnectionsPerServer = Math.Clamp(options.SenderConcurrency, 1, 64),
+                EnableMultipleHttp2Connections = true
+            };
+        })
+        // The handler is owned by a singleton client talking to one host, so there is nothing
+        // to gain from rotating it; PooledConnectionLifetime above handles DNS.
+        .SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+
+        // The maskers are stateless, and MaskerFactory resolves each of them once, so they are
+        // registered as singletons rather than constructed per masked property.
+        services.TryAddSingleton<DefaultStringMasker>();
+        services.TryAddSingleton<EmailMasker>();
+        services.TryAddSingleton<CreditCardMasker>();
+        services.TryAddSingleton<SocialSecurityMasker>();
+        services.TryAddSingleton<DateMasker>();
+        services.TryAddSingleton<PostalCodeMasker>();
+        services.TryAddSingleton<AuthorizationMasker>();
 
         // Register masker factory for .NET 6+ compatibility
         services.TryAddSingleton<MaskerFactory>();
@@ -345,98 +299,96 @@ public static class ServiceCollectionExtensions
             serviceProvider.GetRequiredService<TreblleMetadataCollector>());
 
         services.AddHostedService<TreblleDiagnosticHostedService>();
-
-        return services;
+        services.AddHostedService<TreblleStartupLogger>();
     }
 
     /// <summary>
-    /// Detects Treblle credentials from multiple configuration sources in order of precedence.
+    /// Merges user overrides over the defaults into an immutable rule set.
     /// </summary>
-    private static (string sdkToken, string apiKey) GetTreblleCredentials(IConfiguration configuration)
+    private static MaskingRules BuildMaskingRules(IDictionary<string, string>? overrides)
     {
-        // Check for SDK Token in order of precedence
-        var sdkToken = 
-            // 1. Environment variable (highest precedence)
-            Environment.GetEnvironmentVariable("TREBLLE_SDK_TOKEN") ??
-            // 2. appsettings.json
-            configuration["Treblle:SdkToken"];
-
-        // Check for API Key in order of precedence  
-        var apiKey = 
-            // 1. Environment variable (highest precedence)
-            Environment.GetEnvironmentVariable("TREBLLE_API_KEY") ??
-            // 2. appsettings.json
-            configuration["Treblle:ApiKey"];
-
-
-        // Validate that we found both credentials
-        if (string.IsNullOrWhiteSpace(sdkToken))
+        if (overrides is null || overrides.Count == 0)
         {
-            throw new InvalidOperationException(
-                "Treblle SDK Token not found. Please set one of the following:\n" +
-                "- Environment variable: TREBLLE_SDK_TOKEN\n" +
-                "- Configuration: Treblle:SdkToken in appsettings.json\n" +
-                "- Or use AddTreblle(sdkToken, apiKey) overload for manual configuration");
+            return new MaskingRules(DefaultMaskingMap);
         }
 
-        if (string.IsNullOrWhiteSpace(apiKey))
+        var merged = new Dictionary<string, string>(DefaultMaskingMap, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in overrides)
         {
-            throw new InvalidOperationException(
-                "Treblle API Key not found. Please set one of the following:\n" +
-                "- Environment variable: TREBLLE_API_KEY\n" +
-                "- Configuration: Treblle:ApiKey in appsettings.json\n" +
-                "- Or use AddTreblle(sdkToken, apiKey) overload for manual configuration");
+            merged[entry.Key] = entry.Value;
         }
 
-        return (sdkToken, apiKey);
+        return new MaskingRules(merged);
     }
 
     /// <summary>
-    /// Gets the custom ingress endpoint from environment variable or configuration.
-    /// Returns null if not configured.
+    /// The final configuration step. Nothing here throws.
     /// </summary>
-    private static string? GetCustomIngressEndpoint(IConfiguration configuration)
+    /// <remarks>
+    /// These checks used to throw from inside a Configure delegate, which does not run until
+    /// <c>IOptions&lt;TreblleOptions&gt;</c> is first resolved — inside the middleware, on the
+    /// first request. An application with a missing credential booted green and then returned
+    /// 500 for every request. A configuration problem now disables the SDK, and
+    /// <see cref="TreblleStartupLogger"/> reports it during startup.
+    /// </remarks>
+    private static void ValidateOptions(TreblleOptions options)
     {
-        var endpoint =
-            // Environment variable has highest precedence
-            Environment.GetEnvironmentVariable("TREBLLE_CUSTOM_INGRESS_ENDPOINT") ??
-            // Configuration from appsettings.json
-            configuration["Treblle:CustomIngressEndpoint"];
-
-        if (string.IsNullOrWhiteSpace(endpoint))
+        if (string.IsNullOrWhiteSpace(options.SdkToken))
         {
-            return null;
+            Disable(options,
+                "SDK Token not found. Set the TREBLLE_SDK_TOKEN environment variable, or Treblle:SdkToken in appsettings.json, or use the AddTreblle(sdkToken, apiKey) overload.");
+            return;
         }
 
-        return ValidateAndNormalizeIngressEndpoint(endpoint);
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            Disable(options,
+                "API Key not found. Set the TREBLLE_API_KEY environment variable, or Treblle:ApiKey in appsettings.json, or use the AddTreblle(sdkToken, apiKey) overload.");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.CustomIngressEndpoint))
+        {
+            if (!TryNormalizeIngressEndpoint(options.CustomIngressEndpoint!, out var normalized, out var error))
+            {
+                // Deliberately not falling back to the default endpoint: that would ship data
+                // to a region the operator explicitly did not choose.
+                Disable(options, error);
+                return;
+            }
+
+            options.CustomIngressEndpoint = normalized;
+        }
+    }
+
+    private static void Disable(TreblleOptions options, string reason)
+    {
+        options.IsEnabled = false;
+        options.DisabledReason = reason;
     }
 
     /// <summary>
-    /// Validates and normalizes a custom ingress endpoint URL.
+    /// Validates and normalizes a custom ingress endpoint URL, removing any trailing slash.
     /// </summary>
-    /// <param name="endpoint">The endpoint URL to validate</param>
-    /// <returns>The normalized endpoint URL (without trailing slash)</returns>
-    /// <exception cref="ArgumentException">Thrown when the URL is invalid</exception>
-    private static string ValidateAndNormalizeIngressEndpoint(string endpoint)
+    private static bool TryNormalizeIngressEndpoint(string endpoint, out string? normalized, out string error)
     {
+        normalized = null;
+
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
         {
-            throw new ArgumentException(
-                $"Invalid CustomIngressEndpoint URL: '{endpoint}'. Must be a valid absolute URL.",
-                nameof(endpoint));
+            error = $"Invalid CustomIngressEndpoint URL: '{endpoint}'. Must be a valid absolute URL.";
+            return false;
         }
 
         if (uri.Scheme != Uri.UriSchemeHttps)
         {
-            throw new ArgumentException(
-                $"Invalid CustomIngressEndpoint URL: '{endpoint}'. Must use HTTPS scheme.",
-                nameof(endpoint));
+            error = $"Invalid CustomIngressEndpoint URL: '{endpoint}'. Must use HTTPS scheme.";
+            return false;
         }
 
-        // Normalize: remove trailing slash
-        var normalizedUrl = uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath.TrimEnd('/');
-
-        return normalizedUrl;
+        normalized = uri.GetLeftPart(UriPartial.Authority) + uri.AbsolutePath.TrimEnd('/');
+        error = string.Empty;
+        return true;
     }
-
 }

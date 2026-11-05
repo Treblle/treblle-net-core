@@ -4,140 +4,44 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 
 namespace Treblle.Net.Core;
 
-internal class TreblleMiddleware : IDisposable
+internal sealed class TreblleMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly TreblleService _treblleService;
+    private readonly TreblleSender _sender;
     private readonly TrebllePayloadFactory _trebllePayloadFactory;
     private readonly ILogger<TreblleMiddleware> _logger;
     private readonly TreblleOptions _options;
-    private readonly Channel<TrebllePayload> _channel;
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
-    private readonly Task _backgroundTask;
-    private bool _disposed = false;
 
     public TreblleMiddleware(
         RequestDelegate next,
-        TreblleService treblleService,
+        TreblleSender sender,
         TrebllePayloadFactory trebllePayloadFactory,
         ILogger<TreblleMiddleware> logger,
         IOptions<TreblleOptions> options)
     {
         _next = next;
-        _treblleService = treblleService;
+        _sender = sender;
         _trebllePayloadFactory = trebllePayloadFactory;
         _logger = logger;
         _options = options.Value;
-
-        // Bounded channel prevents unbounded memory growth - increased capacity for high-volume scenarios
-        var channelOptions = new BoundedChannelOptions(3000)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = false
-        };
-        _channel = Channel.CreateBounded<TrebllePayload>(channelOptions);
-
-        _backgroundTask = Task.Run(() => SendPayloadAsync(_cancellationTokenSource.Token));
-    }
-
-    private async Task SendPayloadAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (await _channel.Reader.WaitToReadAsync(cancellationToken))
-            {
-                while (_channel.Reader.TryRead(out var payload))
-                {
-                    // Check if we're being rate limited - drop payload silently if so
-                    if (_treblleService.ShouldThrottle())
-                    {
-                        if (_options.DebugMode)
-                        {
-                            _logger.LogDebug("[TREBLLE]: Payload dropped - rate limited");
-                        }
-                        continue; // Drop payload and process next
-                    }
-
-                    try
-                    {
-                        await _treblleService.SendPayloadAsync(payload);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log and discard failed payload immediately - no retry to prevent memory buildup
-                        if (_options.DebugMode)
-                        {
-                            _logger.LogDebug(ex, "[TREBLLE]: Failed to send payload to Treblle, discarding payload to prevent memory accumulation");
-                        }
-                        // Payload is automatically discarded as we don't re-queue it
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when cancellation is requested
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in Treblle background payload sender");
-        }
-    }
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                try
-                {
-                    _cancellationTokenSource.Cancel();
-                    _channel.Writer.Complete();
-
-                    // Wait for background task to complete with timeout
-                    if (!_backgroundTask.Wait(TimeSpan.FromSeconds(5)))
-                    {
-                        if (_options.DebugMode)
-                        {
-                            _logger.LogDebug("[TREBLLE]: Background task did not complete within timeout");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (_options.DebugMode)
-                    {
-                        _logger.LogDebug(ex, "[TREBLLE]: Exception during middleware disposal");
-                    }
-                }
-                finally
-                {
-                    _cancellationTokenSource.Dispose();
-                }
-            }
-
-            _disposed = true;
-        }
     }
 
     public async Task Invoke(HttpContext httpContext)
     {
+        // A configuration problem disables the SDK (and is reported at startup). Pass the
+        // request straight through rather than taking the host API down over telemetry.
+        if (!_options.IsEnabled)
+        {
+            await _next(httpContext);
+            return;
+        }
+
         var treblleAttribute = httpContext.GetEndpoint()?.Metadata.GetMetadata<TreblleAttribute>();
         var requestPath = httpContext.Request.Path.Value ?? "/";
 
@@ -196,7 +100,7 @@ internal class TreblleMiddleware : IDisposable
     private async Task HandleRequestWithTreblleAsync(HttpContext httpContext, TreblleAttribute? treblleAttribute)
     {
         var originalResponseBody = httpContext.Response.Body;
-        var stopwatch = Stopwatch.StartNew();
+        var stopwatch = ValueStopwatch.StartNew();
         ResponseCaptureStream? captureStream = null;
         Exception? capturedException = null;
 
@@ -235,11 +139,26 @@ internal class TreblleMiddleware : IDisposable
 
             await _next(httpContext);
 
+            // Guarded separately from _next. A failure here is a client-side problem — a
+            // disconnect or reset while we write the buffered body — and the handler has
+            // already succeeded. Letting it reach the catch below would record it as an API
+            // error and rethrow it into the host pipeline, manufacturing a failure the
+            // application would never have seen.
             var captured = captureStream?.CapturedContent;
             if (captured != null)
             {
-                captured.Position = 0;
-                await captured.CopyToAsync(originalResponseBody);
+                try
+                {
+                    captured.Position = 0;
+                    await captured.CopyToAsync(originalResponseBody);
+                }
+                catch (Exception ex)
+                {
+                    if (_options.DebugMode)
+                    {
+                        _logger.LogDebug(ex, "[TREBLLE]: Failed to flush the buffered response to the client");
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -258,9 +177,8 @@ internal class TreblleMiddleware : IDisposable
         finally
         {
             httpContext.Response.Body = originalResponseBody;
-            stopwatch.Stop();
-            var elapsedMiliseconds = stopwatch.ElapsedMilliseconds;
-            httpContext.Items["elapsedMiliseconds"] = elapsedMiliseconds;
+            var elapsedMiliseconds = (long)stopwatch.GetElapsedTime().TotalMilliseconds;
+            httpContext.Items[TreblleItemKeys.ElapsedMilliseconds] = elapsedMiliseconds;
 
             try
             {
@@ -283,7 +201,7 @@ internal class TreblleMiddleware : IDisposable
                         treblleAttribute: treblleAttribute,
                         capturedRouteTemplate: capturedRouteTemplate);
 
-                    _channel.Writer.TryWrite(payload);
+                    _sender.TryEnqueue(payload);
 
                     if (_options.DebugMode)
                     {

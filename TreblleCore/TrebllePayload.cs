@@ -117,5 +117,12 @@ namespace Treblle.Net.Core
         public string? Sdk { get; set; }
         [JsonPropertyName("data")]
         public Data Data { get; set; } = new();
+
+        /// <summary>
+        /// Approximate serialized size, used by the sender to bound the memory held by the
+        /// outbound queue. Internal, so the source-generated serializer does not emit it;
+        /// an exact figure would mean serializing on the request thread.
+        /// </summary>
+        internal long EstimatedSizeBytes { get; set; }
     }
 }
