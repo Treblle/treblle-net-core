@@ -45,6 +45,16 @@ public static class JsonMasker
             {
                 var currentPath = string.Join(".", path.Concat(new[] { property.Key }));
 
+                // Metadata is supplied by the developer rather than by an API client, so it is
+                // passed through verbatim - matching the Laravel SDK. Without this the path
+                // walk below would redact data.metadata.email, .password, .secret and friends
+                // off the default masking map. Ordinal full-path equality, so a user key named
+                // "metadata" elsewhere (data.request.body.metadata) is unaffected.
+                if (string.Equals(currentPath, "data.metadata", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (property.Value is JsonObject)
                 {
                     MaskFieldsFromJsonNode(property.Value, maskingMap, path.Concat(new[] { property.Key }).ToList(), serviceProvider, logger);

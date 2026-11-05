@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Mime;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -19,16 +20,6 @@ namespace Treblle.Net.Core;
 
 internal sealed class TrebllePayloadFactory
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false,
-        PropertyNameCaseInsensitive = false,
-        NumberHandling = JsonNumberHandling.AllowReadingFromString,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
-
     // Cache static system information to avoid repeated allocations
     private static readonly string CachedOSName = Environment.OSVersion.ToString();
     private static readonly string CachedOSVersion = Environment.OSVersion.Version.ToString();
@@ -52,7 +43,7 @@ internal sealed class TrebllePayloadFactory
         long elapsedMilliseconds,
         Exception? exception = null,
         TreblleAttribute? treblleAttribute = null,
-        string? capturedRoutePath = null)
+        string? capturedRouteTemplate = null)
     {
         string? apiKey = treblleAttribute?.ApiKey;
 
@@ -69,7 +60,7 @@ internal sealed class TrebllePayloadFactory
 
         AddServer(httpContext, payload);
 
-        await AddRequest(httpContext, payload, capturedRoutePath);
+        await AddRequest(httpContext, payload, capturedRouteTemplate);
 
         await TryAddResponse(httpContext, response, elapsedMilliseconds, payload);
 
@@ -77,7 +68,49 @@ internal sealed class TrebllePayloadFactory
 
         payload.Data.Queries = TreblleQueryCollector.GetQueries().ToList();
 
+        AddMetadata(httpContext, payload);
+
         return payload;
+    }
+
+    /// <summary>
+    /// Merges static options metadata with anything set during the request through
+    /// <see cref="ITreblleMetadata"/>, per-request values winning on a key collision.
+    /// </summary>
+    /// <remarks>
+    /// Reading the collector off <paramref name="httpContext"/> rather than taking it as a
+    /// constructor dependency is deliberate: this factory is a singleton, so it cannot hold a
+    /// scoped service. It also means the exception-handler payload path in
+    /// ApplicationBuilderExtensions picks metadata up with no extra plumbing, since it
+    /// re-executes on the same HttpContext and the same request scope.
+    /// </remarks>
+    private void AddMetadata(HttpContext httpContext, TrebllePayload payload)
+    {
+        try
+        {
+            var metadata = payload.Data.Metadata;
+
+            // Static values first so per-request values overwrite them.
+            var staticMetadata = _treblleOptions.Metadata;
+            if (staticMetadata is not null)
+            {
+                foreach (var entry in staticMetadata)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.Key))
+                    {
+                        metadata[entry.Key] = TreblleMetadataNormalizer.Normalize(entry.Value);
+                    }
+                }
+            }
+
+            // GetService, not GetRequiredService: the middleware can be registered without
+            // AddTreblle having run, and missing metadata must never cost the payload.
+            httpContext.RequestServices?.GetService<TreblleMetadataCollector>()?.CopyTo(metadata);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred while adding metadata to Treblle payload.");
+        }
     }
 
     /// <summary>
@@ -115,7 +148,7 @@ internal sealed class TrebllePayloadFactory
         payload.Data.Server.Os.Architecture = CachedArchitecture;
     }
 
-    private async Task AddRequest(HttpContext httpContext, TrebllePayload payload, string? capturedRoutePath = null)
+    private async Task AddRequest(HttpContext httpContext, TrebllePayload payload, string? capturedRouteTemplate = null)
     {
         try
         {
@@ -128,18 +161,12 @@ internal sealed class TrebllePayloadFactory
             // UseTreblle) calls SetEndpoint(null) when handling errors, so GetEndpoint() is unreliable here.
             // Fall back to GetEndpoint() for apps that register UseTreblle before UseRouting — endpoint is
             // null before _next in that setup but is resolved by the time we reach this point for 2xx responses.
-            if (capturedRoutePath is not null)
-            {
-                payload.Data.Request.RoutePath = capturedRoutePath;
-            }
-            else
-            {
-                var routeEndpoint = httpContext.GetEndpoint() as RouteEndpoint;
-                var routeTemplate = routeEndpoint?.RoutePattern?.RawText;
-                payload.Data.Request.RoutePath = routeTemplate is not null
-                    ? "/" + routeTemplate
-                    : NormalizeRoutePath(httpContext.Request.Path);
-            }
+            var routeTemplate = capturedRouteTemplate
+                ?? (httpContext.GetEndpoint() as RouteEndpoint)?.RoutePattern?.RawText;
+            // A null template means ASP.NET Core matched no registered route, so there is no route to
+            // report. Leave route_path null rather than inferring one from the request path — the
+            // platform relies on its presence to tell a real route from unmatched traffic.
+            payload.Data.Request.RoutePath = FormatRoutePath(routeTemplate);
             payload.Data.Request.UserAgent = httpContext.Request.Headers["User-Agent"].ToString();
             payload.Data.Request.Method = httpContext.Request.Method;
 
@@ -553,58 +580,51 @@ internal sealed class TrebllePayloadFactory
         contentType.StartsWith("application/vnd.", StringComparison.OrdinalIgnoreCase);
     }
 
-    private string NormalizeRoutePath(string path)
+    /// <summary>
+    /// Formats a route template for the payload: exactly one leading slash, literal segments lowercased.
+    /// RawText is "api/[controller]" for attribute routes but "/api/items" for a minimal API declared with
+    /// a leading slash, so prefixing unconditionally emitted "//api/items" and kept minimal-API endpoints
+    /// from grouping with controller ones. Attribute routing also substitutes [controller] and [action]
+    /// with the C# class and method names, so RawText carries identifier casing ("/api/Mps/Check") that
+    /// matches neither the URL callers use nor what other Treblle SDKs report for the same endpoint. Route
+    /// matching is case-insensitive, so the lowercased form is equivalent. Anything inside braces is
+    /// preserved verbatim — parameter names and constraints surface as parameter identifiers in the
+    /// generated documentation.
+    /// </summary>
+    private static string? FormatRoutePath(string? routeTemplate)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return path;
-
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        
-        // Pre-allocate with known capacity to avoid resizing
-        var normalizedSegments = new List<string>(segments.Length);
-
-        for (int i = 0; i < segments.Length; i++)
+        if (routeTemplate is null)
         {
-            var segment = segments[i];
+            return null;
+        }
 
-            bool isGuid = Guid.TryParse(segment, out _);
-            bool isInt = int.TryParse(segment, out _);
+        var template = routeTemplate.TrimStart('/');
+        var builder = new StringBuilder(template.Length + 1);
+        builder.Append('/');
+        var depth = 0;
 
-            if (isGuid || isInt)
+        foreach (var character in template)
+        {
+            if (character == '{')
             {
-                // Look back for the previous static segment to name the placeholder
-                string paramName = "id";
-                if (i > 0)
+                depth++;
+                builder.Append(character);
+            }
+            else if (character == '}')
+            {
+                if (depth > 0)
                 {
-                    var prevSegment = segments[i - 1];
-                    paramName = ToCamelCase(Singularize(prevSegment)) + "Id";
+                    depth--;
                 }
-
-                normalizedSegments.Add($"{{{paramName}}}");
+                builder.Append(character);
             }
             else
             {
-                normalizedSegments.Add(segment);
+                builder.Append(depth == 0 ? char.ToLowerInvariant(character) : character);
             }
         }
 
-        return "/" + string.Join("/", normalizedSegments);
-    }
-
-    private string ToCamelCase(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return value;
-        return char.ToLowerInvariant(value[0]) + value.Substring(1);
-    }
-
-    // Helper to singularize simple plural nouns like "workspaces" -> "workspace"
-    private string Singularize(string plural)
-    {
-        if (plural.EndsWith("ies"))
-            return plural.Substring(0, plural.Length - 3) + "y";
-        if (plural.EndsWith("s") && !plural.EndsWith("ss"))
-            return plural.Substring(0, plural.Length - 1);
-        return plural;
+        return builder.ToString();
     }
 
     private static object ConvertXDocumentToObject(XDocument doc)

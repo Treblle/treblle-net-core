@@ -102,10 +102,18 @@ internal sealed class TreblleService
                             UserAgent = payload.Data.Request.UserAgent,
                             Method = payload.Data.Request.Method,
                             Headers = payload.Data.Request.Headers,
-                            Body = new { __message = "Request data payload was bigger than 5MB" }
+                            // Dictionary, not an anonymous type: anonymous types are not
+                            // declared in TreblleJsonContext, and the source-generated
+                            // serializer throws on any runtime type it has no metadata for.
+                            Body = new Dictionary<string, object>
+                            {
+                                ["__message"] = "Request data payload was bigger than 5MB"
+                            }
                         },
                         Response = payload.Data.Response,
-                        Errors = payload.Data.Errors
+                        Errors = payload.Data.Errors,
+                        Queries = payload.Data.Queries,
+                        Metadata = payload.Data.Metadata
                     }
                 };
                 

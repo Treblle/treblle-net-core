@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Diagnostics;
+﻿using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
@@ -204,9 +204,7 @@ internal class TreblleMiddleware : IDisposable
         // calls context.SetEndpoint(null) when handling errors, so GetEndpoint() returns null by the time
         // the finally block runs.
         var routeEndpoint = httpContext.GetEndpoint() as RouteEndpoint;
-        var capturedRoutePath = routeEndpoint?.RoutePattern?.RawText is not null
-            ? "/" + routeEndpoint.RoutePattern.RawText
-            : null;
+        var capturedRouteTemplate = routeEndpoint?.RoutePattern?.RawText;
 
         try
         {
@@ -283,7 +281,7 @@ internal class TreblleMiddleware : IDisposable
                         elapsedMiliseconds,
                         exception: exception,
                         treblleAttribute: treblleAttribute,
-                        capturedRoutePath: capturedRoutePath);
+                        capturedRouteTemplate: capturedRouteTemplate);
 
                     _channel.Writer.TryWrite(payload);
 

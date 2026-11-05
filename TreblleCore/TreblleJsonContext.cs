@@ -18,6 +18,13 @@ namespace Treblle.Net.Core;
 [JsonSerializable(typeof(Dictionary<string, object>))] // For headers
 [JsonSerializable(typeof(Dictionary<string, string>))] // For form data and masking config
 [JsonSerializable(typeof(long))]
+// Metadata values are polymorphic (object), and the source generator has no reflection
+// fallback - every runtime type reaching the payload must be declared or serialization
+// throws. TreblleMetadataNormalizer reduces values to exactly these types.
+[JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(float))]
+[JsonSerializable(typeof(decimal))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,

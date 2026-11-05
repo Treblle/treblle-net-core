@@ -1,0 +1,51 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # enable GitHub OIDC token issuance for trusted publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Verify tag matches project version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PROJECT_VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' TreblleCore/Treblle.Net.Core.csproj)
+          echo "tag=$TAG_VERSION project=$PROJECT_VERSION"
+          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$PROJECT_VERSION</Version> in TreblleCore/Treblle.Net.Core.csproj"
+            exit 1
+          fi
+
+      - name: Pack
+        run: dotnet pack TreblleCore/Treblle.Net.Core.csproj --configuration Release -o ./nupkg
+
+      # Request the short-lived key immediately before pushing: it is valid for 1 hour.
+      - name: NuGet login (OIDC -> temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push package
+        run: |
+          dotnet nuget push "./nupkg/*.nupkg" \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
