@@ -43,18 +43,25 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Verify tag matches project version
+      # The tag is the source of truth for the published version; <Version> in the csproj is
+      # only a local dev default. A push to NuGet is permanent, so reject a malformed tag
+      # before it becomes a package nobody can unpublish.
+      - name: Resolve version from tag
+        id: version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PROJECT_VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' TreblleCore/Treblle.Net.Core.csproj)
-          echo "tag=$TAG_VERSION project=$PROJECT_VERSION"
-          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$PROJECT_VERSION</Version> in TreblleCore/Treblle.Net.Core.csproj"
+          if ! echo "$TAG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Tag $GITHUB_REF_NAME is not a semantic version (expected vMAJOR.MINOR.PATCH[-prerelease])"
             exit 1
           fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version $TAG_VERSION"
 
       - name: Pack
-        run: dotnet pack TreblleCore/Treblle.Net.Core.csproj --configuration Release -o ./nupkg
+        run: |
+          dotnet pack TreblleCore/Treblle.Net.Core.csproj \
+            --configuration Release -o ./nupkg \
+            -p:Version="${{ steps.version.outputs.version }}"
 
       # Request the short-lived key immediately before pushing: it is valid for 1 hour.
       - name: NuGet login (OIDC -> temp API key)
