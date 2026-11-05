@@ -85,7 +85,7 @@ internal sealed class TreblleService
                 var reducedPayload = new TrebllePayload
                 {
                     ApiKey = payload.ApiKey,
-                    ProjectId = payload.ProjectId,
+                    SdkToken = payload.SdkToken,
                     Version = payload.Version,
                     Sdk = payload.Sdk,
                     Data = new Data

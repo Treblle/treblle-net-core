@@ -43,8 +43,8 @@ public static class ServiceCollectionExtensions
     /// Adds Treblle SDK to the service collection.
     /// </summary>
     /// <param name="services">The service collection</param>
-    /// <param name="sdkToken">SDK Token for authentication (sent as api_key in payload)</param>
-    /// <param name="apiKey">API Key for project identification (sent as project_id in payload)</param>
+    /// <param name="sdkToken">SDK Token for authentication (sent as sdk_token in payload)</param>
+    /// <param name="apiKey">API Key for project identification (sent as api_key in payload)</param>
     /// <param name="FieldsToMaskPairedWithMaskers">Optional custom masking configuration</param>
     /// <param name="disableMasking">Whether to disable masking for performance</param>
     /// <param name="debugMode">Whether to enable debug logging for troubleshooting</param>
@@ -63,8 +63,8 @@ public static class ServiceCollectionExtensions
     /// Adds Treblle SDK to the service collection with configuration options.
     /// </summary>
     /// <param name="services">The service collection</param>
-    /// <param name="sdkToken">SDK Token for authentication (sent as api_key in payload)</param>
-    /// <param name="apiKey">API Key for project identification (sent as project_id in payload)</param>
+    /// <param name="sdkToken">SDK Token for authentication (sent as sdk_token in payload)</param>
+    /// <param name="apiKey">API Key for project identification (sent as api_key in payload)</param>
     /// <param name="configureOptions">Action to configure TreblleOptions including excludedPaths, debugMode, etc.</param>
     public static IServiceCollection AddTreblle(
         this IServiceCollection services,

@@ -5,12 +5,12 @@ namespace Treblle.Net.Core;
 public sealed class TreblleOptions
 {
     /// <summary>
-    /// SDK Token for authentication (sent as api_key in payload)
+    /// SDK Token for authentication (sent as sdk_token in payload)
     /// </summary>
     public string SdkToken { get; set; } = string.Empty;
 
     /// <summary>
-    /// API Key for project identification (sent as project_id in payload)
+    /// API Key for project identification (sent as api_key in payload)
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 

@@ -109,8 +109,8 @@ namespace Treblle.Net.Core
     {
         [JsonPropertyName("api_key")]
         public string? ApiKey { get; set; }
-        [JsonPropertyName("project_id")]
-        public string? ProjectId { get; set; }
+        [JsonPropertyName("sdk_token")]
+        public string? SdkToken { get; set; }
         [JsonPropertyName("version")]
         public int Version { get; set; }
         [JsonPropertyName("sdk")]

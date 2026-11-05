@@ -51,9 +51,11 @@ internal sealed class TrebllePayloadFactory
         {
             Sdk = "net-core",
             Version = TreblleConstants.PayloadVersion,
-            // Map new properties to legacy payload field names for backward compatibility
-            ProjectId = apiKey ?? GetEffectiveApiKey(), // ApiKey from config -> project_id in payload
-            ApiKey = GetEffectiveSdkToken(),  // SdkToken from config -> api_key in payload
+            // Payload fields mirror the configuration options: the SDK Token travels as
+            // sdk_token and the API Key as api_key. The x-api-key request header carries the
+            // SDK Token and is unaffected by this mapping.
+            ApiKey = apiKey ?? GetEffectiveApiKey(),
+            SdkToken = GetEffectiveSdkToken(),
         };
 
         AddLanguage(payload);
@@ -96,10 +98,7 @@ internal sealed class TrebllePayloadFactory
             {
                 foreach (var entry in staticMetadata)
                 {
-                    if (!string.IsNullOrWhiteSpace(entry.Key))
-                    {
-                        metadata[entry.Key] = TreblleMetadataNormalizer.Normalize(entry.Value);
-                    }
+                    TreblleMetadataNormalizer.Write(metadata, entry.Key, entry.Value);
                 }
             }
 
